@@ -3,7 +3,6 @@ import streamlit as st
 
 from pathlib import Path
 from importlib import import_module
-
 from database import (
     conectar,
     iniciar_sesion,
@@ -11,7 +10,6 @@ from database import (
     consultar,
     contar
 )
-
 
 st.set_page_config(
     page_title="Electra Safety | Maletín Digital",
@@ -26,7 +24,7 @@ LOGO = BASE_DIR / "logo.png"
 
 # DISEÑO CORPORATIVO
 
-st.markdown("""
+st.html("""
 <style>
 
 .stApp {
@@ -53,35 +51,35 @@ st.markdown("""
 .banner {
     background: #0C2335;
     border-left: 8px solid #FFB900;
-    padding: 28px;
+    padding: 30px;
     border-radius: 12px;
-    margin-bottom: 20px;
+    margin-bottom: 24px;
 }
 
 .banner-titulo {
-    font-size: 34px;
+    font-size: 36px;
     font-weight: 750;
     color: #FFFFFF !important;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
 }
 
 .banner-subtitulo {
     color: #E2E8F0 !important;
-    font-size: 16px;
+    font-size: 17px;
 }
 
 .banner-norma {
     color: #FFB900 !important;
     font-weight: 600;
-    font-size: 14px;
-    margin-top: 14px;
+    font-size: 15px;
+    margin-top: 16px;
 }
 
 .modulo {
     background: #FFFFFF;
     border-top: 4px solid #FFB900;
     border-radius: 10px;
-    padding: 18px;
+    padding: 20px;
     min-height: 170px;
     margin-top: 8px;
     box-shadow: 0 2px 6px #0000000D;
@@ -91,6 +89,7 @@ st.markdown("""
     color: #0C2335;
     font-size: 18px;
     font-weight: 700;
+    margin-bottom: 10px;
 }
 
 .modulo p {
@@ -102,12 +101,7 @@ st.markdown("""
     color: #18754A;
     font-size: 12px;
     font-weight: 600;
-}
-
-.estado-pendiente {
-    color: #8C6500;
-    font-size: 12px;
-    font-weight: 600;
+    margin-top: 12px;
 }
 
 .stButton > button {
@@ -124,7 +118,7 @@ st.markdown("""
 }
 
 </style>
-""", unsafe_allow_html=True)
+""")
 
 
 # INICIO DE SESIÓN
@@ -202,40 +196,31 @@ modulos = {
         "Creación y seguimiento de proyectos.",
 
     "03. Riesgos eléctricos":
-        "Evaluación de peligros y controles.",
+        "Evaluación de peligros y jerarquía de controles.",
 
     "04. Arco eléctrico y EPP":
-        "EPP y fronteras de protección.",
+        "Evaluación de arco, choque y equipos de protección.",
 
     "05. Etiquetas":
-        "Etiquetas para equipos eléctricos.",
+        "Diseño e impresión de etiquetas eléctricas.",
 
     "06. Bloqueo y etiquetado LOTO":
-        "Control de energías peligrosas.",
+        "Dispositivos y control de energías peligrosas.",
 
     "07. Permisos de trabajo":
-        "Gestión del trabajo eléctrico."
+        "Gestión de trabajos eléctricos energizados y desenergizados."
 }
 
 
 rutas = {
     "01. Clientes": "clientes",
-
     "02. Proyectos": "proyectos",
-
     "03. Riesgos eléctricos": "riesgos",
-
     "04. Arco eléctrico y EPP": "arco_electrico",
-
     "05. Etiquetas": "etiquetas",
-
     "06. Bloqueo y etiquetado LOTO": "loto",
-
     "07. Permisos de trabajo": "permisos"
 }
-
-
-implementados = list(rutas)
 
 
 def navegar(destino):
@@ -290,7 +275,6 @@ with st.sidebar:
             if registros:
 
                 st.write(registros[0]["nombre"])
-
                 st.caption(registros[0]["codigo"])
 
             else:
@@ -338,37 +322,31 @@ with st.sidebar:
 
 if pagina == "Inicio":
 
-    st.markdown("""
+    st.html("""
     <div class="banner">
-
         <div class="banner-titulo">
             Electra Safe 360
         </div>
-
         <div class="banner-subtitulo">
             Maletín digital de herramientas para
             la gestión de la seguridad eléctrica.
         </div>
-
         <div class="banner-norma">
             NFPA 70E | Edición 2027
         </div>
-
     </div>
-    """, unsafe_allow_html=True)
+    """)
 
     st.subheader("Panel general")
 
     try:
 
         total_clientes = contar("clientes")
-
         total_proyectos = contar("proyectos")
 
-        total_evaluaciones = contar(
-            "riesgos"
-        ) + contar(
-            "arco_electrico"
+        total_evaluaciones = (
+            contar("evaluaciones")
+            + contar("arco_electrico")
         )
 
         c1, c2, c3, c4 = st.columns(4)
@@ -389,7 +367,7 @@ if pagina == "Inicio":
         )
 
         c4.metric(
-            "Módulos conectados",
+            "Módulos en el menú",
             f"{len(rutas)} de 7"
         )
 
@@ -400,8 +378,8 @@ if pagina == "Inicio":
     except Exception:
 
         st.error(
-            "No se pudo establecer la conexión "
-            "con la base de datos."
+            "No se pudieron consultar los indicadores "
+            "de la base de datos."
         )
 
     st.divider()
@@ -441,38 +419,17 @@ if pagina == "Inicio":
 
             with columna:
 
-                activo = nombre in implementados
-
-                clase = (
-                    "estado-activo"
-                    if activo
-                    else "estado-pendiente"
-                )
-
-                estado = (
-                    "CONECTADO"
-                    if activo
-                    else "EN DESARROLLO"
-                )
-
-                st.markdown(
-                    f"""
-                    <div class="modulo">
-
-                        <div class="modulo-titulo">
-                            {nombre}
-                        </div>
-
-                        <p>{descripcion}</p>
-
-                        <div class="{clase}">
-                            {estado}
-                        </div>
-
+                st.html(f"""
+                <div class="modulo">
+                    <div class="modulo-titulo">
+                        {nombre}
                     </div>
-                    """,
-                    unsafe_allow_html=True
-                )
+                    <p>{descripcion}</p>
+                    <div class="estado-activo">
+                        ABRIR MÓDULO
+                    </div>
+                </div>
+                """)
 
                 st.button(
                     "Abrir herramienta",
@@ -556,12 +513,10 @@ else:
 
 # PIE DE PÁGINA
 
-st.markdown("""
+st.html("""
 <div class="pie">
-
     ElectraSafety Consultores |
     Electra Safe 360 |
     Seguridad Eléctrica
-
 </div>
-""", unsafe_allow_html=True)
+""")
