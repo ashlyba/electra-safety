@@ -472,3 +472,22 @@ def mostrar():
                         "arco",
                         "Evaluación eliminada correctamente."
                     )
+_mostrar_evaluaciones_original = mostrar
+
+
+def mostrar():
+
+    tab_evaluacion, tab_proteccion = st.tabs([
+        "Evaluación técnica",
+        "Protección personal"
+    ])
+
+    with tab_evaluacion:
+
+        _mostrar_evaluaciones_original()
+
+    with tab_proteccion:
+
+        mostrar_guia_epp(
+            clave="arco_guia_epp"
+        )
