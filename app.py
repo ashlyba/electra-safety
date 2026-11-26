@@ -22,7 +22,10 @@ LOGO = BASE_DIR / "logo.png"
 VERSION = "1.0"
 
 INTEGRANTES = [
-    "Pendiente de completar"
+    "Ashly Barrantes"
+    "Nicole Valverde"
+    "Xochilt Velasquez"
+    "Cristian Fonseca"
 ]
 
 
