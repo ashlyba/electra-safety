@@ -1,8 +1,9 @@
 
 import streamlit as st
+import pandas as pd
 
 
-CATEGORIAS = {
+CLASIFICACIONES = {
     1: 4,
     2: 8,
     3: 25,
@@ -10,103 +11,242 @@ CATEGORIAS = {
 }
 
 
-def mostrar_guia_epp():
+COMPONENTES = [
+    ("Cabeza", "Casco de seguridad"),
+    ("Ojos", "Protección ocular"),
+    ("Rostro", "Pantalla facial o capucha"),
+    ("Oídos", "Protección auditiva"),
+    ("Torso", "Ropa con clasificación contra arco"),
+    ("Brazos", "Protección de brazos"),
+    ("Manos", "Guantes y protectores"),
+    ("Piernas", "Ropa de protección"),
+    ("Pies", "Calzado de seguridad")
+]
 
-    st.subheader("Guía de protección personal")
+
+def mostrar_ilustracion():
+
+    st.html("""
+    <svg viewBox="0 0 440 450"
+         width="100%"
+         xmlns="http://www.w3.org/2000/svg">
+
+        <rect width="440" height="450"
+              rx="12" fill="#F2F5F8"/>
+
+        <g stroke="#0D2333" stroke-width="3">
+
+            <circle cx="220" cy="70"
+                    r="35" fill="#CBD5E1"/>
+
+            <path d="M180 65 Q220 0 260 65 Z"
+                  fill="#FFB800"/>
+
+            <rect x="191" y="70"
+                  width="58" height="28"
+                  rx="5" fill="#9BB6C8"/>
+
+            <rect x="205" y="104"
+                  width="30" height="25"
+                  fill="#CBD5E1"/>
+
+            <path d="M175 128 L265 128
+                     L280 265 L160 265 Z"
+                  fill="#294758"/>
+
+            <path d="M175 128 L125 220
+                     L150 238 L195 150 Z"
+                  fill="#294758"/>
+
+            <path d="M265 128 L315 220
+                     L290 238 L245 150 Z"
+                  fill="#294758"/>
+
+            <rect x="122" y="220"
+                  width="30" height="40"
+                  rx="8" fill="#FFB800"/>
+
+            <rect x="288" y="220"
+                  width="30" height="40"
+                  rx="8" fill="#FFB800"/>
+
+            <path d="M160 265 L215 265
+                     L205 395 L160 395 Z"
+                  fill="#294758"/>
+
+            <path d="M225 265 L280 265
+                     L280 395 L235 395 Z"
+                  fill="#294758"/>
+
+            <rect x="148" y="395"
+                  width="62" height="26"
+                  rx="5" fill="#0D2333"/>
+
+            <rect x="232" y="395"
+                  width="62" height="26"
+                  rx="5" fill="#0D2333"/>
+
+        </g>
+
+        <g stroke="#64748B"
+           stroke-width="1.5">
+
+            <path d="M185 45 H80"/>
+            <path d="M249 80 H360"/>
+            <path d="M170 165 H70"/>
+            <path d="M318 240 H380"/>
+            <path d="M280 330 H360"/>
+            <path d="M148 410 H80"/>
+
+        </g>
+
+        <g fill="#0D2333"
+           font-family="Arial"
+           font-size="12">
+
+            <text x="20" y="38">Cabeza</text>
+            <text x="300" y="73">Rostro y ojos</text>
+            <text x="15" y="158">Torso y brazos</text>
+            <text x="330" y="232">Manos</text>
+            <text x="315" y="323">Piernas</text>
+            <text x="30" y="402">Pies</text>
+
+        </g>
+
+    </svg>
+    """)
 
     st.caption(
-        "Referencia: NFPA 70E 2027, "
-        "Tabla 130.7(C)(15)(c)."
+        "Esquema ilustrativo de protección corporal. "
+        "No representa un conjunto certificado."
     )
 
-    categoria = st.selectbox(
-        "Categoría obtenida en la evaluación",
-        [1, 2, 3, 4],
-        key="guia_categoria_epp"
+
+def mostrar_guia_epp(
+    categoria=None,
+    clave="guia_epp"
+):
+
+    st.subheader(
+        "Equipos de protección personal"
     )
 
-    st.metric(
-        "Clasificación mínima contra arco",
-        f"{CATEGORIAS[categoria]} cal/cm²"
+    st.caption(
+        "Referencia académica: NFPA 70E 2027."
     )
 
-    st.warning(
-        "Consulta la tabla normativa completa, "
-        "incluidas sus notas y condiciones. "
-        "Esta guía no sustituye la selección "
-        "realizada por personal calificado."
+    if categoria not in CLASIFICACIONES:
+
+        categoria = st.selectbox(
+            "Categoría de protección",
+            [1, 2, 3, 4],
+            key=f"{clave}_categoria"
+        )
+
+    requerida = CLASIFICACIONES[categoria]
+
+    c1, c2 = st.columns([1, 1.5])
+
+    with c1:
+
+        mostrar_ilustracion()
+
+    with c2:
+
+        st.metric(
+            "Categoría de EPP",
+            categoria
+        )
+
+        st.metric(
+            "Clasificación mínima contra arco",
+            f"{requerida} cal/cm²"
+        )
+
+        seleccionada = st.number_input(
+            "Clasificación del conjunto "
+            "seleccionado (cal/cm²)",
+            min_value=0.0,
+            value=0.0,
+            step=1.0,
+            key=f"{clave}_clasificacion"
+        )
+
+        if seleccionada == 0:
+
+            st.info(
+                "Ingrese la clasificación indicada "
+                "por el fabricante."
+            )
+
+        elif seleccionada < requerida:
+
+            st.error(
+                "Clasificación inferior al mínimo "
+                "correspondiente a la categoría."
+            )
+
+        else:
+
+            st.success(
+                "La clasificación ingresada "
+                "alcanza el mínimo numérico."
+            )
+
+            st.caption(
+                "Esto no demuestra por sí solo "
+                "la conformidad del conjunto."
+            )
+
+    st.divider()
+
+    st.subheader(
+        "Verificación de componentes"
     )
-
-    if categoria == 1:
-
-        st.markdown("""
-- Ropa con clasificación contra arco.
-- Camisa de manga larga y pantalones, u overol.
-- Pantalla facial o capucha con clasificación contra arco.
-        """)
-
-    elif categoria == 2:
-
-        st.markdown("""
-- Ropa con clasificación contra arco.
-- Camisa de manga larga y pantalones, u overol.
-- Capucha contra arco o pantalla facial y pasamontañas
-  con clasificación contra arco.
-        """)
-
-    else:
-
-        st.markdown("""
-- Consultar los requisitos específicos del traje
-  y sistema de protección contra arco.
-- Verificar la clasificación del conjunto completo.
-- Consultar la protección requerida para cabeza,
-  rostro, manos y demás partes expuestas.
-        """)
-
-    st.markdown("#### Aspectos complementarios")
-
-    st.write(
-        "Verificar los requisitos de protección "
-        "ocular, auditiva, de cabeza, manos y pies "
-        "establecidos para la categoría correspondiente."
-    )
-
-    st.info(
-        "La protección contra choque eléctrico "
-        "debe evaluarse independientemente de "
-        "la protección contra arco eléctrico."
-    )
-
-    st.markdown("#### Guantes aislantes")
 
     st.dataframe(
-        {
-            "Clase": ["00", "0", "1", "2", "3", "4"],
-            "Tensión máxima CA (V)": [
-                500, 1000, 7500,
-                17000, 26500, 36000
-            ],
-            "Tensión máxima CC (V)": [
-                750, 1500, 11250,
-                25500, 39750, 54000
+        pd.DataFrame(
+            COMPONENTES,
+            columns=[
+                "Zona corporal",
+                "Elemento de protección"
             ]
-        },
+        ),
         hide_index=True,
         use_container_width=True
     )
 
     st.caption(
-        "Referencia: Tabla 130.7(C)(7)(a)."
+        "Los componentes obligatorios deben "
+        "determinarse según la categoría, "
+        "las notas y las condiciones normativas."
+    )
+
+    for zona, elemento in COMPONENTES:
+
+        st.checkbox(
+            f"Verificación documental: {elemento}",
+            key=f"{clave}_{zona}"
+        )
+
+    st.text_area(
+        "Fabricante, modelo, certificación "
+        "y observaciones",
+        key=f"{clave}_observaciones"
     )
 
     st.warning(
-        "Verificar tensión de exposición, protectores, "
-        "estado físico, inspecciones y pruebas "
-        "periódicas del equipo aislante."
+        "La protección contra arco eléctrico "
+        "no equivale a aislamiento dieléctrico. "
+        "Ambos riesgos deben evaluarse por separado."
     )
 
-    st.error(
-        "Material académico. No utilizar como "
-        "autorización para trabajos eléctricos."
+    st.caption(
+        "Herramienta académica. No constituye "
+        "una autorización de trabajo."
     )
+
+
+def mostrar():
+
+    mostrar_guia_epp()
