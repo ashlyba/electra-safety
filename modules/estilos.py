@@ -118,6 +118,22 @@ def aplicar_estilos():
         color: #0D2333;
     }
 
+    /* CONTRASTE DE BOTONES DEL MENU LATERAL */
+
+    [data-testid="stSidebar"] .stButton button,
+    [data-testid="stSidebar"] .stButton button p,
+    [data-testid="stSidebar"] .stButton button span,
+    [data-testid="stSidebar"] .stButton button div {
+        color: #0D2333 !important;
+    }
+
+    [data-testid="stSidebar"] .stButton button:hover,
+    [data-testid="stSidebar"] .stButton button:hover p,
+    [data-testid="stSidebar"] .stButton button:hover span,
+    [data-testid="stSidebar"] .stButton button:hover div {
+        color: #0D2333 !important;
+    }
+
     /* FORMULARIOS */
 
     [data-testid="stForm"] {
