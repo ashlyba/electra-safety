@@ -5,6 +5,7 @@ from supabase import create_client
 TABLAS = {
     "clientes",
     "proyectos",
+    "evaluaciones",
     "riesgos",
     "arco_electrico",
     "etiquetas",
@@ -24,9 +25,7 @@ def conectar():
 
 
 def iniciar_sesion(correo, password):
-    db = conectar()
-
-    respuesta = db.auth.sign_in_with_password({
+    respuesta = conectar().auth.sign_in_with_password({
         "email": correo,
         "password": password
     })
@@ -51,48 +50,59 @@ def validar_tabla(tabla):
 def consultar(tabla, filtros=None):
     validar_tabla(tabla)
 
-    consulta = conectar().table(tabla).select("*")
+    registros = []
+    inicio = 0
+    limite = 500
 
-    if filtros:
-        for campo, valor in filtros.items():
-            consulta = consulta.eq(campo, valor)
+    while True:
 
-    respuesta = consulta.order(
-        "fecha_creacion",
-        desc=True
-    ).execute()
+        consulta = conectar().table(tabla).select("*")
 
-    return respuesta.data or []
+        if filtros:
+            for campo, valor in filtros.items():
+                consulta = consulta.eq(campo, valor)
+
+        respuesta = consulta.order(
+            "fecha_creacion",
+            desc=True
+        ).order("id").range(
+            inicio,
+            inicio + limite - 1
+        ).execute()
+
+        datos = respuesta.data or []
+        registros.extend(datos)
+
+        if len(datos) < limite:
+            break
+
+        inicio += limite
+
+    return registros
 
 
 def insertar(tabla, datos):
     validar_tabla(tabla)
 
-    respuesta = conectar().table(tabla).insert(
+    return conectar().table(tabla).insert(
         datos
-    ).execute()
-
-    return respuesta.data
+    ).execute().data
 
 
 def actualizar(tabla, registro_id, datos):
     validar_tabla(tabla)
 
-    respuesta = conectar().table(tabla).update(
+    return conectar().table(tabla).update(
         datos
-    ).eq("id", registro_id).execute()
-
-    return respuesta.data
+    ).eq("id", registro_id).execute().data
 
 
 def eliminar(tabla, registro_id):
     validar_tabla(tabla)
 
-    respuesta = conectar().table(tabla).delete().eq(
+    return conectar().table(tabla).delete().eq(
         "id", registro_id
-    ).execute()
-
-    return respuesta.data
+    ).execute().data
 
 
 def contar(tabla):
