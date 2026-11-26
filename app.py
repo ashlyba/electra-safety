@@ -2,6 +2,8 @@
 import streamlit as st
 
 from pathlib import Path
+from importlib import import_module
+
 from database import (
     conectar,
     iniciar_sesion,
@@ -9,8 +11,6 @@ from database import (
     consultar,
     contar
 )
-
-from modules import clientes, proyectos
 
 
 st.set_page_config(
@@ -136,7 +136,10 @@ if "usuario" not in st.session_state:
     with centro:
 
         if LOGO.exists():
-            st.image(str(LOGO), use_container_width=True)
+            st.image(
+                str(LOGO),
+                use_container_width=True
+            )
 
         st.title("Electra Safe 360")
 
@@ -146,7 +149,9 @@ if "usuario" not in st.session_state:
 
         with st.form("login"):
 
-            correo = st.text_input("Correo electrónico")
+            correo = st.text_input(
+                "Correo electrónico"
+            )
 
             password = st.text_input(
                 "Contraseña",
@@ -162,12 +167,17 @@ if "usuario" not in st.session_state:
             if entrar:
 
                 try:
+
                     if iniciar_sesion(correo, password):
                         st.rerun()
+
                     else:
-                        st.error("No se pudo iniciar sesión.")
+                        st.error(
+                            "No se pudo iniciar sesión."
+                        )
 
                 except Exception:
+
                     st.error(
                         "No se pudo iniciar sesión. "
                         "Verifica tus credenciales y la conexión."
@@ -184,22 +194,52 @@ if "usuario" not in st.session_state:
 
 modulos = {
     "Inicio": "Panel principal",
-    "01. Clientes": "Registro y administración de empresas.",
-    "02. Proyectos": "Creación y seguimiento de proyectos.",
-    "03. Riesgos eléctricos": "Evaluación de peligros y controles.",
-    "04. Arco eléctrico y EPP": "EPP y fronteras de protección.",
-    "05. Etiquetas": "Etiquetas para equipos eléctricos.",
-    "06. Bloqueo y etiquetado LOTO": "Control de energías peligrosas.",
-    "07. Permisos de trabajo": "Gestión del trabajo eléctrico."
+
+    "01. Clientes":
+        "Registro y administración de empresas.",
+
+    "02. Proyectos":
+        "Creación y seguimiento de proyectos.",
+
+    "03. Riesgos eléctricos":
+        "Evaluación de peligros y controles.",
+
+    "04. Arco eléctrico y EPP":
+        "EPP y fronteras de protección.",
+
+    "05. Etiquetas":
+        "Etiquetas para equipos eléctricos.",
+
+    "06. Bloqueo y etiquetado LOTO":
+        "Control de energías peligrosas.",
+
+    "07. Permisos de trabajo":
+        "Gestión del trabajo eléctrico."
 }
 
-implementados = [
-    "01. Clientes",
-    "02. Proyectos"
-]
+
+rutas = {
+    "01. Clientes": "clientes",
+
+    "02. Proyectos": "proyectos",
+
+    "03. Riesgos eléctricos": "riesgos",
+
+    "04. Arco eléctrico y EPP": "arco_electrico",
+
+    "05. Etiquetas": "etiquetas",
+
+    "06. Bloqueo y etiquetado LOTO": "loto",
+
+    "07. Permisos de trabajo": "permisos"
+}
+
+
+implementados = list(rutas)
 
 
 def navegar(destino):
+
     st.session_state["pagina"] = destino
 
 
@@ -208,8 +248,14 @@ def navegar(destino):
 with st.sidebar:
 
     if LOGO.exists():
-        st.image(str(LOGO), use_container_width=True)
+
+        st.image(
+            str(LOGO),
+            use_container_width=True
+        )
+
     else:
+
         st.header("Electra Safety")
 
     st.markdown("### Maletín digital")
@@ -228,27 +274,42 @@ with st.sidebar:
 
     st.markdown("### Proyecto activo")
 
-    proyecto_id = st.session_state.get("proyecto_activo")
+    proyecto_id = st.session_state.get(
+        "proyecto_activo"
+    )
 
     if proyecto_id:
 
         try:
+
             registros = consultar(
                 "proyectos",
                 {"id": proyecto_id}
             )
 
             if registros:
+
                 st.write(registros[0]["nombre"])
+
                 st.caption(registros[0]["codigo"])
+
             else:
-                st.session_state.pop("proyecto_activo", None)
+
+                st.session_state.pop(
+                    "proyecto_activo",
+                    None
+                )
+
                 st.caption("Sin proyecto activo")
 
         except Exception:
-            st.caption("No se pudo consultar el proyecto")
+
+            st.caption(
+                "No se pudo consultar el proyecto"
+            )
 
     else:
+
         st.caption("Sin proyecto activo")
 
     st.divider()
@@ -258,12 +319,19 @@ with st.sidebar:
     if st.button("Cerrar sesión"):
 
         try:
+
             cerrar_sesion()
             st.rerun()
-        except Exception:
-            st.error("No se pudo cerrar la sesión.")
 
-    st.caption("Versión 0.2 | Proyecto académico")
+        except Exception:
+
+            st.error(
+                "No se pudo cerrar la sesión."
+            )
+
+    st.caption(
+        "Versión 0.3 | Proyecto académico"
+    )
 
 
 # PANTALLA PRINCIPAL
@@ -272,16 +340,20 @@ if pagina == "Inicio":
 
     st.markdown("""
     <div class="banner">
+
         <div class="banner-titulo">
             Electra Safe 360
         </div>
+
         <div class="banner-subtitulo">
             Maletín digital de herramientas para
             la gestión de la seguridad eléctrica.
         </div>
+
         <div class="banner-norma">
             NFPA 70E | Edición 2027
         </div>
+
     </div>
     """, unsafe_allow_html=True)
 
@@ -290,19 +362,40 @@ if pagina == "Inicio":
     try:
 
         total_clientes = contar("clientes")
+
         total_proyectos = contar("proyectos")
-        total_evaluaciones = contar("riesgos") + contar(
+
+        total_evaluaciones = contar(
+            "riesgos"
+        ) + contar(
             "arco_electrico"
         )
 
         c1, c2, c3, c4 = st.columns(4)
 
-        c1.metric("Clientes", total_clientes)
-        c2.metric("Proyectos", total_proyectos)
-        c3.metric("Evaluaciones", total_evaluaciones)
-        c4.metric("Módulos habilitados", "2 de 7")
+        c1.metric(
+            "Clientes",
+            total_clientes
+        )
 
-        st.success("Conexión con la base de datos establecida.")
+        c2.metric(
+            "Proyectos",
+            total_proyectos
+        )
+
+        c3.metric(
+            "Evaluaciones",
+            total_evaluaciones
+        )
+
+        c4.metric(
+            "Módulos conectados",
+            f"{len(rutas)} de 7"
+        )
+
+        st.success(
+            "Conexión con la base de datos establecida."
+        )
 
     except Exception:
 
@@ -316,6 +409,7 @@ if pagina == "Inicio":
     c1, c2 = st.columns(2)
 
     with c1:
+
         st.button(
             "Registrar o consultar clientes",
             on_click=navegar,
@@ -323,13 +417,16 @@ if pagina == "Inicio":
         )
 
     with c2:
+
         st.button(
             "Crear o consultar proyectos",
             on_click=navegar,
             args=("02. Proyectos",)
         )
 
-    st.subheader("Herramientas de seguridad eléctrica")
+    st.subheader(
+        "Herramientas de seguridad eléctrica"
+    )
 
     herramientas = list(modulos.items())[1:]
 
@@ -348,24 +445,30 @@ if pagina == "Inicio":
 
                 clase = (
                     "estado-activo"
-                    if activo else "estado-pendiente"
+                    if activo
+                    else "estado-pendiente"
                 )
 
                 estado = (
-                    "HABILITADO"
-                    if activo else "EN DESARROLLO"
+                    "CONECTADO"
+                    if activo
+                    else "EN DESARROLLO"
                 )
 
                 st.markdown(
                     f"""
                     <div class="modulo">
+
                         <div class="modulo-titulo">
                             {nombre}
                         </div>
+
                         <p>{descripcion}</p>
+
                         <div class="{clase}">
                             {estado}
                         </div>
+
                     </div>
                     """,
                     unsafe_allow_html=True
@@ -413,59 +516,52 @@ if pagina == "Inicio":
         st.write("Control de versiones: GitHub")
 
 
-# MÓDULO 1
-
-elif pagina == "01. Clientes":
-
-    try:
-        clientes.mostrar()
-    except Exception:
-        st.error(
-            "No se pudo cargar el módulo de clientes. "
-            "Verifica la conexión."
-        )
-
-
-# MÓDULO 2
-
-elif pagina == "02. Proyectos":
-
-    try:
-        proyectos.mostrar()
-    except Exception:
-        st.error(
-            "No se pudo cargar el módulo de proyectos. "
-            "Verifica la conexión."
-        )
-
-
-# MÓDULOS PENDIENTES
+# HERRAMIENTAS
 
 else:
 
-    st.title(pagina)
-
-    st.write(modulos[pagina])
-
-    st.warning(
-        "Herramienta en desarrollo. "
-        "Todavía no genera resultados técnicos."
-    )
-
     st.button(
-        "Volver al inicio",
+        "← Volver al inicio",
         on_click=navegar,
-        args=("Inicio",)
+        args=("Inicio",),
+        key="volver_inicio"
     )
+
+    try:
+
+        modulo = import_module(
+            f"modules.{rutas[pagina]}"
+        )
+
+        modulo.mostrar()
+
+    except Exception as error:
+
+        st.error(
+            f"No se pudo cargar {pagina}."
+        )
+
+        st.caption(
+            "Revisa los archivos del módulo "
+            "y los registros de Streamlit."
+        )
+
+        import logging
+
+        logging.exception(
+            "Error al cargar módulo %s",
+            pagina
+        )
 
 
 # PIE DE PÁGINA
 
 st.markdown("""
 <div class="pie">
+
     ElectraSafety Consultores |
     Electra Safe 360 |
     Seguridad Eléctrica
+
 </div>
 """, unsafe_allow_html=True)
-
