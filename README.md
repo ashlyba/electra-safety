@@ -3,80 +3,80 @@
 
 ## ElectraSafety Consultores
 
-Sistema académico de apoyo a la evaluación,
-documentación y gestión de la seguridad eléctrica.
+Maletín digital académico para la gestión
+de seguridad eléctrica.
 
-Desarrollado con referencia a la NFPA 70E,
-edición 2027.
+Referencia normativa: NFPA 70E, edición 2027.
 
-## Funcionalidades
+## Módulos
 
 1. Administración de clientes.
 2. Gestión de proyectos.
 3. Evaluación de riesgos eléctricos.
-4. Evaluación de arco eléctrico, EPP y fronteras.
-5. Diseño y generación de etiquetas eléctricas.
+4. Arco eléctrico, EPP y fronteras.
+5. Etiquetas eléctricas.
 6. Bloqueo y etiquetado LOTO.
-7. Permisos de trabajo eléctrico.
+7. Permisos de trabajo.
 
-## Arquitectura
+## Tecnologías
 
-- Interfaz de usuario: Streamlit.
-- Lenguaje de programación: Python.
-- Base de datos: Supabase.
-- Autenticación: Supabase Auth.
-- Generación de documentos: ReportLab.
-- Control de versiones: GitHub.
+- Python
+- Streamlit
+- Supabase
+- ReportLab
+- Pandas
+- GitHub
 
 ## Inteligencia artificial
 
-Se utilizó ChatGPT como herramienta de apoyo
-durante el desarrollo, organización y documentación
-del programa.
+ChatGPT se utilizó como herramienta de apoyo
+durante la programación, diseño, organización
+y documentación del sistema.
 
-## Instalación local
+## Instalación
 
 Instalar las dependencias:
 
     pip install -r requirements.txt
 
-Configurar las credenciales autorizadas de Supabase
-en el archivo local:
+Configurar las credenciales autorizadas
+de Supabase mediante:
 
     .streamlit/secrets.toml
 
-Ejecutar:
+Ejecutar la aplicación:
 
     streamlit run app.py
 
+## Archivo de entrada
+
+app.py
+
 ## Almacenamiento
 
-La información se organiza mediante clientes,
-proyectos y registros técnicos asociados.
+Los registros se almacenan en Supabase
+y se organizan por cliente y proyecto.
 
 ## Seguridad
 
-No almacenar credenciales privadas en GitHub.
+Las credenciales no deben publicarse
+en el repositorio.
 
-Utilizar únicamente cuentas autorizadas y datos
-ficticios durante las demostraciones académicas.
-
-## Referencia normativa
-
-NFPA 70E, edición 2027.
+Utilizar datos ficticios para demostraciones.
 
 ## Limitaciones
 
-La aplicación no sustituye la evaluación de
-personal calificado ni los estudios eléctricos
-especializados.
+Herramienta académica de apoyo.
 
-Los resultados técnicos y documentos requieren
-revisión antes de cualquier utilización real.
+No sustituye estudios eléctricos especializados,
+la consulta de la normativa ni la revisión
+por personal calificado.
+
+Los documentos generados no constituyen
+autorizaciones reales de trabajo.
 
 ## Versión
 
-0.4 - Desarrollo académico.
+1.0 - Candidata a validación académica.
 
-Pendiente de validación integral y revisión
-de los requisitos normativos.
+Pendiente de revisión normativa y pruebas integrales.
