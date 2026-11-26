@@ -118,7 +118,7 @@ def aplicar_estilos():
         color: #0D2333;
     }
 
-    /* CONTRASTE DE BOTONES DEL MENU LATERAL */
+    /* CONTRASTE DEL MENU LATERAL */
 
     [data-testid="stSidebar"] .stButton button,
     [data-testid="stSidebar"] .stButton button p,
@@ -132,6 +132,40 @@ def aplicar_estilos():
     [data-testid="stSidebar"] .stButton button:hover span,
     [data-testid="stSidebar"] .stButton button:hover div {
         color: #0D2333 !important;
+    }
+
+    /* VENTANAS EMERGENTES */
+
+    [data-testid="stDialog"] [role="dialog"] {
+        background: #FFFFFF;
+        border-radius: 14px;
+        border-top: 4px solid #FFB800;
+        box-shadow: 0 15px 50px #0D233340;
+    }
+
+    [data-testid="stDialog"] h2 {
+        color: #0D2333;
+    }
+
+    [data-testid="stDialog"] button,
+    [data-testid="stDialog"] button p,
+    [data-testid="stDialog"] button span {
+        color: #0D2333 !important;
+    }
+
+    /* NOTIFICACIONES FLOTANTES */
+
+    [data-testid="stToast"] {
+        background: #FFFFFF;
+        border: 1px solid #DFE6ED;
+        border-left: 4px solid #FFB800;
+        border-radius: 10px;
+        box-shadow: 0 5px 20px #0D233320;
+    }
+
+    [data-testid="stToast"] p {
+        color: #0D2333 !important;
+        font-weight: 500;
     }
 
     /* FORMULARIOS */
