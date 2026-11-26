@@ -1,8 +1,16 @@
 
 import streamlit as st
 import pandas as pd
-from modules.guia_epp import mostrar_guia_epp
-from database import consultar, insertar, eliminar
+
+from datetime import datetime, timezone
+from uuid import uuid4
+
+from database import (
+    consultar,
+    insertar,
+    actualizar,
+    eliminar
+)
 
 from modules.comunes import (
     seleccionar_proyecto,
@@ -19,6 +27,7 @@ from modules.tablas_nfpa import (
     PROTECCION_ARCO
 )
 
+from modules.guia_epp import mostrar_guia_epp
 from modules.reportes import generar_pdf
 
 
@@ -33,73 +42,786 @@ def distancia_texto(valor):
     return f"{valor} m"
 
 
+def fecha_actual():
+
+    return datetime.now(
+        timezone.utc
+    ).strftime("%Y-%m-%d %H:%M UTC")
+
+
 def presentar_resultado(detalle):
 
-    st.subheader("Resultados de protección contra arco")
+    st.subheader(
+        "Protección contra arco eléctrico"
+    )
 
-    if detalle["Método aplicable"] == "Sí":
+    if detalle.get("Método aplicable") == "Sí":
 
         c1, c2, c3 = st.columns(3)
 
         c1.metric(
             "Categoría de EPP",
-            detalle["Categoría"]
+            detalle.get("Categoría", "—")
         )
 
         c2.metric(
             "Protección mínima",
-            f"{detalle['Protección mínima']} cal/cm²"
+            f"{detalle.get('Protección mínima')} cal/cm²"
         )
 
         c3.metric(
             "Frontera de arco",
-            f"{detalle['Frontera de arco']} m"
+            f"{detalle.get('Frontera de arco')} m"
         )
 
-        st.success(
-            "Los parámetros ingresados coinciden "
-            "con una fila implementada de la tabla."
+        st.info(
+            "Coincidencia preliminar con una fila "
+            "implementada del método de tablas."
         )
 
     else:
 
-        st.error(detalle["Motivo"])
+        st.warning(
+            detalle.get(
+                "Motivo",
+                "Información insuficiente."
+            )
+        )
 
-    st.subheader("Protección contra choque eléctrico")
+    st.subheader(
+        "Protección contra choque eléctrico"
+    )
 
     c1, c2, c3 = st.columns(3)
 
     c1.metric(
         "Aproximación limitada",
-        detalle["Aproximación limitada"]
+        detalle.get(
+            "Aproximación limitada",
+            "No determinada"
+        )
     )
 
     c2.metric(
         "Aproximación restringida",
-        detalle["Aproximación restringida"]
+        detalle.get(
+            "Aproximación restringida",
+            "No determinada"
+        )
     )
 
     c3.metric(
         "Clase orientativa de guante",
-        detalle["Clase de guante"]
+        detalle.get(
+            "Clase de guante",
+            "No determinada"
+        )
     )
 
     st.caption(
-        "La clase de guante se determina únicamente "
-        "por tensión. No sustituye la selección completa "
-        "de protección contra choque."
+        "La protección contra choque debe "
+        "evaluarse independientemente de la "
+        "protección contra arco eléctrico."
     )
 
     st.warning(
-        "La selección final de EPP, las notas de las "
-        "tablas y las condiciones del equipo deben ser "
-        "verificadas por una persona calificada."
+        "Los resultados son académicos y requieren "
+        "validación normativa y revisión por una "
+        "persona calificada."
+    )
+
+
+def formulario_evaluacion(
+    proyecto,
+    registro=None
+):
+
+    anterior = (
+        registro.get("detalle") or {}
+        if registro
+        else {}
+    )
+
+    identificador = (
+        str(registro["id"])
+        if registro
+        else "nuevo"
+    )
+
+    clave = (
+        f"arco_{proyecto['id']}_{identificador}"
+    )
+
+    sistema_anterior = anterior.get(
+        "Sistema", "CA"
+    )
+
+    sistema = st.radio(
+        "Tipo de sistema",
+        ["CA", "CC"],
+        index=(
+            1 if sistema_anterior == "CC"
+            else 0
+        ),
+        horizontal=True,
+        key=f"{clave}_sistema"
+    )
+
+    equipos = (
+        list(TABLA_CA)
+        if sistema == "CA"
+        else ["Baterías y equipos de CC"]
+    )
+
+    equipo_anterior = anterior.get(
+        "Tipo de equipo"
+    )
+
+    indice_equipo = (
+        equipos.index(equipo_anterior)
+        if equipo_anterior in equipos
+        else 0
+    )
+
+    with st.form(f"{clave}_formulario"):
+
+        st.subheader(
+            "Identificación del punto"
+        )
+
+        c1, c2 = st.columns(2)
+
+        nombre = c1.text_input(
+            "Identificación del equipo *",
+            value=anterior.get("Equipo", "")
+        )
+
+        ubicacion = c2.text_input(
+            "Ubicación del equipo *",
+            value=anterior.get("Ubicación", "")
+        )
+
+        equipo = st.selectbox(
+            "Tipo y clasificación del equipo",
+            equipos,
+            index=indice_equipo
+        )
+
+        tarea = st.text_area(
+            "Tarea que se realizará *",
+            value=anterior.get("Tarea", "")
+        )
+
+        estado = st.selectbox(
+            "Condición del equipo",
+            [
+                "Normal",
+                "Anormal",
+                "No determinada"
+            ],
+            index=2
+        )
+
+        st.subheader(
+            "Parámetros eléctricos"
+        )
+
+        c1, c2 = st.columns(2)
+
+        voltaje = c1.number_input(
+            "Tensión nominal (V)",
+            min_value=0.0,
+            value=float(
+                anterior.get("Tensión (V)") or 0
+            )
+        )
+
+        corriente = c2.number_input(
+            "Corriente de falla disponible (kA)",
+            min_value=0.0,
+            value=float(
+                anterior.get(
+                    "Corriente de falla (kA)"
+                ) or 0
+            ),
+            format="%.3f"
+        )
+
+        tiempo = c1.number_input(
+            "Tiempo de despeje o duración (s)",
+            min_value=0.0,
+            value=float(
+                anterior.get("Tiempo (s)") or 0
+            ),
+            format="%.4f"
+        )
+
+        distancia = c2.number_input(
+            "Distancia de trabajo (mm)",
+            min_value=0.0,
+            value=float(
+                anterior.get(
+                    "Distancia de trabajo (mm)"
+                ) or 0
+            )
+        )
+
+        altitud = st.number_input(
+            "Elevación del sitio (m s. n. m.)",
+            min_value=0,
+            value=int(
+                anterior.get("Altitud (m)") or 0
+            )
+        )
+
+        movil = st.radio(
+            "Tipo de parte energizada expuesta",
+            [
+                "Parte fija",
+                "Conductor móvil"
+            ],
+            index=(
+                1 if anterior.get(
+                    "Parte expuesta"
+                ) == "Conductor móvil"
+                else 0
+            )
+        )
+
+        fuente = st.text_area(
+            "Fuente de los datos eléctricos *",
+            value=anterior.get(
+                "Fuente de datos", ""
+            ),
+            placeholder=(
+                "Estudio de cortocircuito, "
+                "planos, curvas de protección "
+                "y documentación técnica."
+            )
+        )
+
+        st.subheader(
+            "Condiciones de aplicación"
+        )
+
+        requiere_epp = st.checkbox(
+            "La evaluación previa determina "
+            "que se requiere EPP contra arco."
+        )
+
+        clasificacion = st.checkbox(
+            "Se verificó la clasificación "
+            "y el tipo de equipo."
+        )
+
+        mantenimiento = st.checkbox(
+            "Se verificó el estado y "
+            "mantenimiento del equipo."
+        )
+
+        notas = st.checkbox(
+            "Se revisaron las notas, "
+            "condiciones y excepciones "
+            "de la fila normativa."
+        )
+
+        solo_tablas = st.checkbox(
+            "Se utilizará únicamente el método "
+            "de categorías, sin combinarlo "
+            "con energía incidente."
+        )
+
+        evidencia = st.text_area(
+            "Justificación y evidencia "
+            "de las verificaciones",
+            value=anterior.get(
+                "Evidencia normativa", ""
+            )
+        )
+
+        responsable = st.text_input(
+            "Responsable de la evaluación",
+            value=anterior.get(
+                "Responsable", ""
+            )
+        )
+
+        evaluar = st.form_submit_button(
+            "Evaluar parámetros",
+            type="primary",
+            use_container_width=True
+        )
+
+    if evaluar:
+
+        st.session_state.pop(
+            f"{clave}_resultado", None
+        )
+
+        if not all([
+            nombre.strip(),
+            ubicacion.strip(),
+            tarea.strip(),
+            fuente.strip()
+        ]):
+
+            st.error(
+                "Complete los campos obligatorios."
+            )
+
+            return
+
+        arco = calcular_arco(
+            sistema,
+            equipo,
+            voltaje,
+            corriente,
+            tiempo,
+            distancia
+        )
+
+        condiciones = all([
+            requiere_epp,
+            clasificacion,
+            mantenimiento,
+            notas,
+            solo_tablas,
+            bool(evidencia.strip()),
+            estado != "No determinada"
+        ])
+
+        if not condiciones:
+
+            arco = {
+                "aplicable": False,
+                "motivo": (
+                    "No se documentaron todas "
+                    "las condiciones previas "
+                    "de aplicación del método."
+                )
+            }
+
+        choque = limites_choque(
+            sistema,
+            voltaje,
+            movil == "Conductor móvil"
+        )
+
+        limitada = (
+            distancia_texto(
+                choque.get("limitada")
+            )
+            if choque
+            else "No determinada"
+        )
+
+        restringida = (
+            distancia_texto(
+                choque.get("restringida")
+            )
+            if choque
+            else "No determinada"
+        )
+
+        if altitud > 900:
+
+            restringida = (
+                "Requiere revisión por altitud"
+            )
+
+        guante = clase_guante(
+            sistema,
+            voltaje
+        )
+
+        categoria = arco.get(
+            "categoria"
+        )
+
+        detalle = {
+            "Código del punto": anterior.get(
+                "Código del punto"
+            ) or (
+                "AE-" + uuid4().hex[:8].upper()
+            ),
+            "Revisión": (
+                int(
+                    anterior.get("Revisión") or 0
+                ) + 1
+            ),
+            "Fecha de revisión": fecha_actual(),
+            "Equipo": nombre.strip(),
+            "Tipo de equipo": equipo,
+            "Ubicación": ubicacion.strip(),
+            "Tarea": tarea.strip(),
+            "Condición del equipo": estado,
+            "Sistema": sistema,
+            "Tensión (V)": voltaje,
+            "Corriente de falla (kA)": corriente,
+            "Tiempo (s)": tiempo,
+            "Distancia de trabajo (mm)": distancia,
+            "Altitud (m)": altitud,
+            "Parte expuesta": movil,
+            "Fuente de datos": fuente,
+            "Responsable": responsable,
+            "Requiere EPP contra arco": requiere_epp,
+            "Clasificación verificada": clasificacion,
+            "Mantenimiento verificado": mantenimiento,
+            "Notas verificadas": notas,
+            "Método exclusivo de tablas": solo_tablas,
+            "Evidencia normativa": evidencia,
+            "Método aplicable": (
+                "Sí" if arco["aplicable"]
+                else "No"
+            ),
+            "Categoría": categoria,
+            "Frontera de arco": arco.get(
+                "frontera"
+            ),
+            "Protección mínima": (
+                PROTECCION_ARCO.get(categoria)
+            ),
+            "Motivo": arco.get("motivo", ""),
+            "Aproximación limitada": limitada,
+            "Aproximación restringida": restringida,
+            "Clase de guante": (
+                guante if guante is not None
+                else "No determinada"
+            ),
+            "Referencia arco": (
+                "130.7(C)(15)(a)"
+                if sistema == "CA"
+                else "130.7(C)(15)(b)"
+            ),
+            "Referencia choque": (
+                "130.4(E)(a)"
+                if sistema == "CA"
+                else "130.4(E)(b)"
+            ),
+            "Estado documental": (
+                "Pendiente de revisión técnica"
+            )
+        }
+
+        st.session_state[
+            f"{clave}_resultado"
+        ] = detalle
+
+    detalle = st.session_state.get(
+        f"{clave}_resultado"
+    )
+
+    if detalle:
+
+        presentar_resultado(detalle)
+
+        st.caption(
+            "Los resultados corresponden a los "
+            "últimos datos evaluados. Si modifica "
+            "los parámetros, evalúe nuevamente."
+        )
+
+        if st.button(
+            (
+                "Guardar nueva revisión"
+                if registro
+                else "Guardar evaluación"
+            ),
+            type="primary",
+            key=f"{clave}_guardar"
+        ):
+
+            try:
+
+                if registro:
+
+                    guardado = actualizar(
+                        "arco_electrico",
+                        registro["id"],
+                        {"detalle": detalle}
+                    )
+
+                else:
+
+                    guardado = insertar(
+                        "arco_electrico",
+                        {
+                            "proyecto_id": proyecto["id"],
+                            "detalle": detalle
+                        }
+                    )
+
+                if guardado:
+
+                    st.session_state.pop(
+                        f"{clave}_resultado",
+                        None
+                    )
+
+                    notificar(
+                        "arco",
+                        "Evaluación guardada correctamente."
+                    )
+
+            except Exception as error:
+
+                st.error(
+                    f"No se pudo guardar: {error}"
+                )
+
+
+def consultar_evaluaciones(proyecto):
+
+    registros = consultar(
+        "arco_electrico",
+        {"proyecto_id": proyecto["id"]}
+    )
+
+    if not registros:
+
+        st.info(
+            "No hay evaluaciones registradas."
+        )
+
+        return
+
+    detalles = [
+        r.get("detalle") or {}
+        for r in registros
+    ]
+
+    tabla = pd.DataFrame(detalles)
+
+    st.dataframe(
+        tabla.reindex(columns=[
+            "Código del punto",
+            "Equipo",
+            "Ubicación",
+            "Sistema",
+            "Tensión (V)",
+            "Método aplicable",
+            "Categoría",
+            "Revisión"
+        ]),
+        hide_index=True,
+        use_container_width=True
+    )
+
+    opciones = {
+        r["id"]: r
+        for r in registros
+    }
+
+    seleccionado = st.selectbox(
+        "Seleccionar punto de análisis",
+        list(opciones),
+        format_func=lambda x: (
+            str(
+                opciones[x]["detalle"].get(
+                    "Equipo", "Sin nombre"
+                )
+            )
+            + " | "
+            + str(
+                opciones[x]["detalle"].get(
+                    "Código del punto",
+                    str(x)[:8]
+                )
+            )
+        ),
+        key=f"arco_consulta_{proyecto['id']}"
+    )
+
+    registro = opciones[seleccionado]
+
+    detalle = registro.get("detalle") or {}
+
+    c1, c2 = st.columns(2)
+
+    c1.write(
+        "**Código:**",
+        detalle.get(
+            "Código del punto",
+            str(seleccionado)[:8]
+        )
+    )
+
+    c2.write(
+        "**Revisión:**",
+        detalle.get("Revisión", 1)
+    )
+
+    presentar_resultado(detalle)
+
+    with st.expander(
+        "Datos técnicos completos"
+    ):
+
+        st.dataframe(
+            pd.DataFrame([
+                {
+                    "Campo": campo,
+                    "Valor": str(valor)
+                }
+                for campo, valor in detalle.items()
+            ]),
+            hide_index=True,
+            use_container_width=True
+        )
+
+    with st.expander(
+        "Editar evaluación"
+    ):
+
+        formulario_evaluacion(
+            proyecto,
+            registro
+        )
+
+    pdf = generar_pdf(
+        "Evaluación de arco y choque eléctrico",
+        proyecto,
+        [
+            ("Resultados técnicos", detalle)
+        ],
+        (
+            "Referencia académica: NFPA 70E 2027. "
+            "Resultados sujetos a validación."
+        )
+    )
+
+    st.download_button(
+        "Descargar informe PDF",
+        pdf,
+        file_name=(
+            "evaluacion_"
+            + str(seleccionado)[:8]
+            + ".pdf"
+        ),
+        mime="application/pdf",
+        key=f"arco_pdf_{seleccionado}",
+        type="primary"
+    )
+
+    with st.expander(
+        "Eliminar evaluación"
+    ):
+
+        st.warning(
+            "La eliminación puede afectar "
+            "la trazabilidad de documentos "
+            "asociados al punto."
+        )
+
+        confirmar = st.checkbox(
+            "Confirmo la eliminación",
+            key=f"arco_confirmar_{seleccionado}"
+        )
+
+        if st.button(
+            "Eliminar evaluación",
+            disabled=not confirmar,
+            key=f"arco_eliminar_{seleccionado}"
+        ):
+
+            try:
+
+                if eliminar(
+                    "arco_electrico",
+                    seleccionado
+                ):
+
+                    notificar(
+                        "arco",
+                        "Evaluación eliminada."
+                    )
+
+            except Exception as error:
+
+                st.error(str(error))
+
+
+def seleccionar_epp(proyecto):
+
+    registros = consultar(
+        "arco_electrico",
+        {"proyecto_id": proyecto["id"]}
+    )
+
+    validos = {}
+
+    for registro in registros:
+
+        detalle = registro.get("detalle") or {}
+
+        try:
+
+            categoria = int(
+                detalle.get("Categoría")
+            )
+
+        except (TypeError, ValueError):
+
+            continue
+
+        if (
+            detalle.get("Método aplicable") == "Sí"
+            and categoria in PROTECCION_ARCO
+        ):
+
+            validos[registro["id"]] = registro
+
+    if not validos:
+
+        st.info(
+            "No existen evaluaciones guardadas "
+            "con una categoría asignada."
+        )
+
+        with st.expander(
+            "Consultar guía general"
+        ):
+
+            mostrar_guia_epp(
+                clave=f"guia_{proyecto['id']}"
+            )
+
+        return
+
+    seleccionado = st.selectbox(
+        "Punto de análisis",
+        list(validos),
+        format_func=lambda x: (
+            str(
+                validos[x]["detalle"].get(
+                    "Equipo", ""
+                )
+            )
+            + " | Categoría "
+            + str(
+                validos[x]["detalle"].get(
+                    "Categoría"
+                )
+            )
+        ),
+        key=f"epp_punto_{proyecto['id']}"
+    )
+
+    detalle = validos[seleccionado]["detalle"]
+
+    presentar_resultado(detalle)
+
+    mostrar_guia_epp(
+        categoria=int(detalle["Categoría"]),
+        clave=f"epp_{seleccionado}"
     )
 
 
 def mostrar():
 
-    st.title("04. Arco eléctrico, EPP y fronteras")
+    st.title(
+        "04. Arco eléctrico, EPP y fronteras"
+    )
 
     advertencia_tecnica()
     mostrar_aviso("arco")
@@ -109,385 +831,20 @@ def mostrar():
     if not proyecto:
         return
 
-    pestana1, pestana2 = st.tabs([
+    tab1, tab2, tab3 = st.tabs([
         "Nueva evaluación",
-        "Consultar evaluaciones"
+        "Consultar y editar",
+        "Selección de EPP"
     ])
 
-    with pestana1:
+    with tab1:
 
-        sistema = st.radio(
-            "Tipo de sistema",
-            ["CA", "CC"],
-            horizontal=True
-        )
+        formulario_evaluacion(proyecto)
 
-        equipos = (
-            list(TABLA_CA)
-            if sistema == "CA"
-            else ["Baterías y equipos de CC"]
-        )
+    with tab2:
 
-        with st.form("formulario_arco"):
+        consultar_evaluaciones(proyecto)
 
-            nombre = st.text_input(
-                "Identificación del equipo *"
-            )
+    with tab3:
 
-            equipo = st.selectbox(
-                "Tipo y clasificación del equipo",
-                equipos
-            )
-
-            tarea = st.text_area(
-                "Tarea que se realizará *"
-            )
-
-            ubicacion = st.text_input("Ubicación del equipo")
-
-            c1, c2 = st.columns(2)
-
-            voltaje = c1.number_input(
-                "Tensión nominal (V)",
-                min_value=0,
-                value=0
-            )
-
-            corriente = c2.number_input(
-                "Corriente de falla disponible (kA)",
-                min_value=0.0,
-                value=0.0,
-                format="%.3f"
-            )
-
-            tiempo = c1.number_input(
-                "Tiempo de despeje o duración del arco (s)",
-                min_value=0.0,
-                value=0.0,
-                format="%.4f"
-            )
-
-            distancia = c2.number_input(
-                "Distancia de trabajo (mm)",
-                min_value=0,
-                value=0
-            )
-
-            altitud = st.number_input(
-                "Elevación del sitio (m s. n. m.)",
-                min_value=0,
-                value=0
-            )
-
-            movil = st.radio(
-                "Tipo de parte energizada expuesta",
-                ["Parte fija", "Conductor móvil"]
-            )
-
-            fuente = st.text_area(
-                "Fuente de los datos eléctricos *",
-                placeholder=(
-                    "Estudio de cortocircuito, "
-                    "curvas de protección, planos, etc."
-                )
-            )
-
-            requiere_epp = st.checkbox(
-                "La evaluación previa de arco indica "
-                "que se requiere EPP contra arco eléctrico"
-            )
-
-            condiciones = st.checkbox(
-                "Se verificó la clasificación del equipo, "
-                "su mantenimiento y las notas aplicables "
-                "de la tabla normativa"
-            )
-
-            solo_tablas = st.checkbox(
-                "Se utilizará el método de categorías, "
-                "sin combinarlo con energía incidente"
-            )
-
-            evaluar = st.form_submit_button(
-                "Evaluar parámetros",
-                type="primary",
-                use_container_width=True
-            )
-
-        if evaluar:
-
-            if not all([
-                nombre.strip(),
-                tarea.strip(),
-                fuente.strip()
-            ]) or min(
-                voltaje, corriente, tiempo, distancia
-            ) <= 0:
-
-                st.error(
-                    "Completa la identificación y todos "
-                    "los parámetros técnicos obligatorios."
-                )
-
-            else:
-
-                arco = calcular_arco(
-                    sistema,
-                    equipo,
-                    voltaje,
-                    corriente,
-                    tiempo,
-                    distancia
-                )
-
-                if not all([
-                    requiere_epp,
-                    condiciones,
-                    solo_tablas
-                ]):
-
-                    arco = {
-                        "aplicable": False,
-                        "motivo": (
-                            "Falta verificar las condiciones "
-                            "previas de aplicación del método."
-                        )
-                    }
-
-                choque = limites_choque(
-                    sistema,
-                    voltaje,
-                    movil == "Conductor móvil"
-                )
-
-                limitada = (
-                    distancia_texto(choque["limitada"])
-                    if choque else "Fuera de alcance"
-                )
-
-                restringida = (
-                    distancia_texto(choque["restringida"])
-                    if choque else "Fuera de alcance"
-                )
-
-                if altitud > 900:
-
-                    restringida = (
-                        "Requiere revisión por altitud"
-                    )
-
-                guante = clase_guante(sistema, voltaje)
-
-                detalle = {
-                    "Equipo": nombre,
-                    "Tipo de equipo": equipo,
-                    "Ubicación": ubicacion,
-                    "Tarea": tarea,
-                    "Sistema": sistema,
-                    "Tensión (V)": voltaje,
-                    "Corriente de falla (kA)": corriente,
-                    "Tiempo (s)": tiempo,
-                    "Distancia de trabajo (mm)": distancia,
-                    "Altitud (m)": altitud,
-                    "Parte expuesta": movil,
-                    "Fuente de datos": fuente,
-                    "Método aplicable": (
-                        "Sí" if arco["aplicable"] else "No"
-                    ),
-                    "Categoría": arco.get("categoria"),
-                    "Frontera de arco": arco.get("frontera"),
-                    "Protección mínima": PROTECCION_ARCO.get(
-                        arco.get("categoria")
-                    ),
-                    "Motivo": arco.get("motivo", ""),
-                    "Aproximación limitada": limitada,
-                    "Aproximación restringida": restringida,
-                    "Clase de guante": (
-                        guante if guante is not None
-                        else "Fuera de alcance"
-                    ),
-                    "Referencia arco": (
-                        "130.7(C)(15)(a)"
-                        if sistema == "CA"
-                        else "130.7(C)(15)(b)"
-                    ),
-                    "Referencia choque": (
-                        "130.4(E)(a)"
-                        if sistema == "CA"
-                        else "130.4(E)(b)"
-                    )
-                }
-
-                st.session_state.resultado_arco = {
-                    "proyecto_id": proyecto["id"],
-                    "detalle": detalle
-                }
-
-        resultado = st.session_state.get("resultado_arco")
-
-        if (
-            resultado
-            and resultado["proyecto_id"] == proyecto["id"]
-        ):
-
-            detalle = resultado["detalle"]
-
-            presentar_resultado(detalle)
-
-            st.caption(
-                "Los resultados corresponden a los últimos "
-                "datos evaluados, no a cambios sin evaluar."
-            )
-
-            if st.button(
-                "Guardar evaluación",
-                type="primary"
-            ):
-
-                try:
-
-                    existentes = consultar(
-                        "arco_electrico",
-                        {"proyecto_id": proyecto["id"]}
-                    )
-
-                    duplicado = any(
-                        r.get("detalle") == detalle
-                        for r in existentes
-                    )
-
-                    if duplicado:
-
-                        st.warning(
-                            "Esta evaluación ya está registrada."
-                        )
-
-                    else:
-
-                        guardado = insertar(
-                            "arco_electrico",
-                            resultado
-                        )
-
-                        if guardado:
-
-                            st.session_state.pop(
-                                "resultado_arco", None
-                            )
-
-                            notificar(
-                                "arco",
-                                "Evaluación registrada exitosamente."
-                            )
-
-                except Exception as error:
-
-                    st.error(str(error))
-
-    with pestana2:
-
-        registros = consultar(
-            "arco_electrico",
-            {"proyecto_id": proyecto["id"]}
-        )
-
-        if not registros:
-
-            st.info("No hay evaluaciones registradas.")
-            return
-
-        detalles = [
-            r.get("detalle") or {}
-            for r in registros
-        ]
-
-        tabla = pd.DataFrame(detalles)
-
-        st.dataframe(
-            tabla.reindex(columns=[
-                "Equipo",
-                "Sistema",
-                "Tensión (V)",
-                "Método aplicable",
-                "Categoría",
-                "Frontera de arco"
-            ]),
-            hide_index=True,
-            use_container_width=True
-        )
-
-        opciones = {r["id"]: r for r in registros}
-
-        seleccionado = st.selectbox(
-            "Seleccionar evaluación",
-            list(opciones),
-            format_func=lambda x: (
-                opciones[x].get("detalle", {}).get(
-                    "Equipo", "Sin nombre"
-                )
-                + " | " + str(x)[:8]
-            )
-        )
-
-        detalle = opciones[seleccionado]["detalle"]
-
-        presentar_resultado(detalle)
-
-        with st.expander("Datos técnicos completos"):
-
-            for campo, valor in detalle.items():
-
-                st.write(f"**{campo}:** {valor}")
-
-        pdf = generar_pdf(
-            "Evaluación de arco y choque eléctrico",
-            proyecto,
-            [("Resultados técnicos", detalle)],
-            "NFPA 70E 2027: 130.4(E), 130.5, "
-            "130.7(C)(7)(a) y 130.7(C)(15)."
-        )
-
-        st.download_button(
-            "Descargar informe PDF",
-            pdf,
-            "evaluacion_arco_electrico.pdf",
-            "application/pdf",
-            type="primary"
-        )
-
-        with st.expander("Eliminar evaluación"):
-
-            confirmar = st.checkbox(
-                "Confirmo la eliminación de esta evaluación"
-            )
-
-            if st.button(
-                "Eliminar evaluación",
-                disabled=not confirmar
-            ):
-
-                if eliminar("arco_electrico", seleccionado):
-
-                    notificar(
-                        "arco",
-                        "Evaluación eliminada correctamente."
-                    )
-_mostrar_evaluaciones_original = mostrar
-
-
-def mostrar():
-
-    tab_evaluacion, tab_proteccion = st.tabs([
-        "Evaluación técnica",
-        "Protección personal"
-    ])
-
-    with tab_evaluacion:
-
-        _mostrar_evaluaciones_original()
-
-    with tab_proteccion:
-
-        mostrar_guia_epp(
-            clave="arco_guia_epp"
-        )
+        seleccionar_epp(proyecto)
