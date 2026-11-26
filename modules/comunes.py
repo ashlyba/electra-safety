@@ -220,7 +220,7 @@ def mostrar_aviso(clave):
 
     if mensaje:
 
-        st.success(mensaje)
+        st.toast(mensaje)
 
 
 def advertencia_tecnica():
