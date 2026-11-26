@@ -14,19 +14,49 @@ ESTADOS = [
 ]
 
 
+def proyecto_duplicado(cliente_id, nombre, excluir=None):
+
+    existentes = consultar(
+        "proyectos",
+        {"cliente_id": cliente_id}
+    )
+
+    return any(
+        p["id"] != excluir
+        and p["nombre"].strip().casefold()
+        == nombre.strip().casefold()
+        for p in existentes
+    )
+
+
+def notificar(mensaje):
+
+    st.session_state.aviso_proyecto = mensaje
+    st.session_state.proyecto_guardado = True
+
+    st.rerun()
+
+
 def formulario_proyecto(clientes, proyecto=None):
 
     proyecto = proyecto or {}
 
-    opciones = {c["id"]: c["nombre_empresa"] for c in clientes}
+    identificador = proyecto.get("id", "nuevo")
+
+    opciones = {
+        c["id"]: c["nombre_empresa"]
+        for c in clientes
+    }
+
     ids = list(opciones)
 
     indice = 0
 
     if proyecto.get("cliente_id") in ids:
+
         indice = ids.index(proyecto["cliente_id"])
 
-    with st.form("formulario_proyecto"):
+    with st.form(f"formulario_proyecto_{identificador}"):
 
         cliente_id = st.selectbox(
             "Cliente *",
@@ -48,6 +78,7 @@ def formulario_proyecto(clientes, proyecto=None):
         c1, c2 = st.columns(2)
 
         with c1:
+
             ubicacion = st.text_input(
                 "Ubicación",
                 value=proyecto.get("ubicacion") or ""
@@ -59,18 +90,21 @@ def formulario_proyecto(clientes, proyecto=None):
             )
 
         with c2:
+
             inicio = st.date_input(
                 "Fecha de inicio",
                 value=date.fromisoformat(
                     proyecto["fecha_inicio"]
-                ) if proyecto.get("fecha_inicio") else date.today()
+                ) if proyecto.get("fecha_inicio") else date.today(),
+                format="DD/MM/YYYY"
             )
 
             final = st.date_input(
                 "Fecha estimada de finalización",
                 value=date.fromisoformat(
                     proyecto["fecha_final"]
-                ) if proyecto.get("fecha_final") else None
+                ) if proyecto.get("fecha_final") else None,
+                format="DD/MM/YYYY"
             )
 
         estado = st.selectbox(
@@ -86,67 +120,105 @@ def formulario_proyecto(clientes, proyecto=None):
             value=proyecto.get("observaciones") or ""
         )
 
-        st.caption(
-            "* El cliente y el nombre son obligatorios "
-            "para identificar y vincular el proyecto."
-        )
+        st.caption("* Campos obligatorios.")
 
         if proyecto.get("codigo"):
+
             st.caption(
                 "Código permanente: " + proyecto["codigo"]
             )
 
         guardar = st.form_submit_button(
             "Guardar proyecto",
-            type="primary"
+            type="primary",
+            use_container_width=True
         )
 
-        if guardar:
+        if not guardar:
+            return
 
-            if not nombre.strip():
-                st.error("Indica el nombre del proyecto.")
-                return
+        if not nombre.strip():
 
-            if final and final < inicio:
-                st.error(
-                    "La fecha final no puede ser anterior "
-                    "a la fecha de inicio."
+            st.error("Indica el nombre del proyecto.")
+            return
+
+        if final and final < inicio:
+
+            st.error(
+                "La fecha final no puede ser anterior "
+                "a la fecha de inicio."
+            )
+
+            return
+
+        datos = {
+            "cliente_id": cliente_id,
+            "nombre": nombre.strip(),
+            "descripcion": descripcion.strip(),
+            "ubicacion": ubicacion.strip(),
+            "responsable": responsable.strip(),
+            "fecha_inicio": inicio.isoformat(),
+            "fecha_final": final.isoformat() if final else None,
+            "estado": estado,
+            "observaciones": observaciones.strip()
+        }
+
+        try:
+
+            if proyecto_duplicado(
+                cliente_id,
+                nombre,
+                proyecto.get("id")
+            ):
+
+                st.warning(
+                    "Ya existe un proyecto con este nombre "
+                    "para el cliente seleccionado."
                 )
+
                 return
 
-            datos = {
-                "cliente_id": cliente_id,
-                "nombre": nombre.strip(),
-                "descripcion": descripcion,
-                "ubicacion": ubicacion,
-                "responsable": responsable,
-                "fecha_inicio": inicio.isoformat(),
-                "fecha_final": final.isoformat() if final else None,
-                "estado": estado,
-                "observaciones": observaciones
-            }
+            if proyecto.get("id"):
 
-            try:
+                resultado = actualizar(
+                    "proyectos",
+                    proyecto["id"],
+                    datos
+                )
 
-                if proyecto.get("id"):
-                    actualizar(
-                        "proyectos",
-                        proyecto["id"],
-                        datos
-                    )
-                    st.session_state.aviso_proyecto = (
-                        "Proyecto actualizado correctamente."
-                    )
-                else:
-                    insertar("proyectos", datos)
-                    st.session_state.aviso_proyecto = (
-                        "Proyecto creado correctamente."
-                    )
+                mensaje = (
+                    f"Proyecto {nombre} actualizado correctamente."
+                )
 
-                st.rerun()
+            else:
 
-            except Exception:
-                st.error("No fue posible guardar el proyecto.")
+                resultado = insertar("proyectos", datos)
+
+                mensaje = (
+                    f"Proyecto {nombre} registrado exitosamente."
+                )
+
+            if not resultado:
+
+                st.error("No se pudo confirmar el guardado.")
+                return
+
+            notificar(mensaje)
+
+        except Exception as error:
+
+            if "23505" in str(error):
+
+                st.warning(
+                    "Ya existe un proyecto con ese nombre "
+                    "para este cliente."
+                )
+
+            else:
+
+                st.error(
+                    "No fue posible guardar el proyecto."
+                )
 
 
 def mostrar():
@@ -158,17 +230,33 @@ def mostrar():
         "de proyectos de seguridad eléctrica."
     )
 
+    if st.session_state.pop("proyecto_guardado", False):
+
+        st.session_state["accion_proyectos"] = (
+            "Consultar proyectos"
+        )
+
+        st.session_state["administrar_proyecto"] = (
+            "Ver información"
+        )
+
     if "aviso_proyecto" in st.session_state:
-        st.success(st.session_state.pop("aviso_proyecto"))
+
+        mensaje = st.session_state.pop("aviso_proyecto")
+
+        st.success(mensaje)
+        st.toast(mensaje, icon="✅")
 
     clientes = consultar("clientes")
     proyectos = consultar("proyectos")
 
     if not clientes:
+
         st.warning(
             "Debes registrar al menos un cliente "
             "antes de crear un proyecto."
         )
+
         return
 
     c1, c2, c3 = st.columns(3)
@@ -192,11 +280,15 @@ def mostrar():
         key="accion_proyectos"
     )
 
+    st.divider()
+
     if opcion == "Nuevo proyecto":
+
         formulario_proyecto(clientes)
         return
 
     if not proyectos:
+
         st.info("Todavía no hay proyectos registrados.")
         return
 
@@ -210,16 +302,26 @@ def mostrar():
         placeholder="Nombre, código o cliente"
     )
 
+    filtro_estado = st.selectbox(
+        "Filtrar por estado",
+        ["Todos"] + ESTADOS
+    )
+
     filtrados = [
         p for p in proyectos
-        if busqueda.lower() in " ".join([
+        if busqueda.strip().casefold() in " ".join([
             p["nombre"],
             p["codigo"],
             nombres_clientes.get(p["cliente_id"], "")
-        ]).lower()
+        ]).casefold()
+        and (
+            filtro_estado == "Todos"
+            or p["estado"] == filtro_estado
+        )
     ]
 
     if not filtrados:
+
         st.warning("No se encontraron proyectos.")
         return
 
@@ -227,18 +329,31 @@ def mostrar():
         {
             "Código": p["codigo"],
             "Proyecto": p["nombre"],
-            "Cliente": nombres_clientes.get(p["cliente_id"], ""),
+            "Cliente": nombres_clientes.get(
+                p["cliente_id"], ""
+            ),
             "Estado": p["estado"],
             "Inicio": p["fecha_inicio"]
         }
         for p in filtrados
     ]
 
+    tabla = pd.DataFrame(registros)
+
     st.dataframe(
-        pd.DataFrame(registros),
+        tabla,
         hide_index=True,
         use_container_width=True
     )
+
+    st.download_button(
+        "Descargar listado de proyectos",
+        data=tabla.to_csv(index=False).encode("utf-8-sig"),
+        file_name="proyectos_electrasafety.csv",
+        mime="text/csv"
+    )
+
+    st.divider()
 
     opciones = {p["id"]: p for p in filtrados}
 
@@ -246,8 +361,9 @@ def mostrar():
         "Seleccionar proyecto",
         list(opciones),
         format_func=lambda x: (
-            opciones[x]["nombre"] +
-            " | " + opciones[x]["codigo"]
+            opciones[x]["nombre"]
+            + " | "
+            + opciones[x]["codigo"]
         )
     )
 
@@ -256,7 +372,8 @@ def mostrar():
     accion = st.radio(
         "Administrar proyecto",
         ["Ver información", "Editar", "Duplicar", "Eliminar"],
-        horizontal=True
+        horizontal=True,
+        key="administrar_proyecto"
     )
 
     if accion == "Ver información":
@@ -264,23 +381,67 @@ def mostrar():
         st.subheader(proyecto["nombre"])
 
         st.write("**Código:**", proyecto["codigo"])
+
         st.write(
             "**Cliente:**",
             nombres_clientes.get(proyecto["cliente_id"], "")
         )
+
         st.write("**Estado:**", proyecto["estado"])
-        st.write("**Ubicación:**", proyecto["ubicacion"] or "-")
-        st.write("**Responsable:**", proyecto["responsable"] or "-")
-        st.write("**Descripción:**", proyecto["descripcion"] or "-")
-        st.write("**Fecha de inicio:**", proyecto["fecha_inicio"])
-        st.write("**Fecha final:**", proyecto["fecha_final"] or "-")
+
+        st.write(
+            "**Ubicación:**",
+            proyecto.get("ubicacion") or "-"
+        )
+
+        st.write(
+            "**Responsable:**",
+            proyecto.get("responsable") or "-"
+        )
+
+        st.write(
+            "**Descripción:**",
+            proyecto.get("descripcion") or "-"
+        )
+
+        st.write(
+            "**Fecha de inicio:**",
+            proyecto.get("fecha_inicio") or "-"
+        )
+
+        st.write(
+            "**Fecha final:**",
+            proyecto.get("fecha_final") or "-"
+        )
+
+        st.write(
+            "**Observaciones:**",
+            proyecto.get("observaciones") or "-"
+        )
+
+        activo = (
+            st.session_state.get("proyecto_activo")
+            == seleccionado
+        )
+
+        if activo:
+
+            st.success("Este es el proyecto activo.")
 
         if st.button(
             "Establecer como proyecto activo",
-            type="primary"
+            type="primary",
+            disabled=activo
         ):
+
             st.session_state.proyecto_activo = seleccionado
-            st.success("Proyecto activo seleccionado.")
+
+            st.session_state.aviso_proyecto = (
+                f"Proyecto {proyecto['nombre']} "
+                "seleccionado correctamente."
+            )
+
+            st.rerun()
 
     elif accion == "Editar":
 
@@ -290,63 +451,98 @@ def mostrar():
 
         st.info(
             "Se creará un proyecto independiente "
-            "con un nuevo código. En esta versión "
-            "se copiarán los datos generales."
+            "con un nuevo código y los mismos datos generales."
         )
 
         nuevo_nombre = st.text_input(
             "Nombre de la copia",
-            value=proyecto["nombre"] + " - Copia"
+            value=proyecto["nombre"] + " - Copia",
+            key=f"copia_{seleccionado}"
         )
 
         if st.button("Duplicar proyecto"):
 
             if not nuevo_nombre.strip():
+
                 st.error("Indica el nombre de la copia.")
                 return
 
-            campos = [
-                "cliente_id",
-                "descripcion",
-                "ubicacion",
-                "responsable",
-                "observaciones"
-            ]
-
-            datos = {
-                campo: proyecto.get(campo)
-                for campo in campos
-            }
-
-            datos["nombre"] = nuevo_nombre.strip()
-            datos["estado"] = "En planificación"
-            datos["fecha_inicio"] = date.today().isoformat()
-
             try:
-                insertar("proyectos", datos)
-                st.session_state.aviso_proyecto = (
-                    "Proyecto duplicado correctamente."
+
+                if proyecto_duplicado(
+                    proyecto["cliente_id"],
+                    nuevo_nombre
+                ):
+
+                    st.warning(
+                        "Ya existe un proyecto con ese nombre. "
+                        "Escribe otro nombre para la copia."
+                    )
+
+                    return
+
+                campos = [
+                    "cliente_id",
+                    "descripcion",
+                    "ubicacion",
+                    "responsable",
+                    "observaciones"
+                ]
+
+                datos = {
+                    campo: proyecto.get(campo)
+                    for campo in campos
+                }
+
+                datos["nombre"] = nuevo_nombre.strip()
+                datos["estado"] = "En planificación"
+                datos["fecha_inicio"] = date.today().isoformat()
+
+                resultado = insertar("proyectos", datos)
+
+                if not resultado:
+
+                    st.error(
+                        "No se pudo confirmar la duplicación."
+                    )
+
+                    return
+
+                notificar(
+                    f"Proyecto {nuevo_nombre} "
+                    "duplicado correctamente."
                 )
-                st.rerun()
-            except Exception:
-                st.error("No fue posible duplicar el proyecto.")
+
+            except Exception as error:
+
+                if "23505" in str(error):
+
+                    st.warning(
+                        "Ya existe un proyecto con ese nombre."
+                    )
+
+                else:
+
+                    st.error(
+                        "No fue posible duplicar el proyecto."
+                    )
 
     elif accion == "Eliminar":
 
-        tablas = [
-            "riesgos",
-            "arco_electrico",
-            "etiquetas",
-            "loto",
-            "permisos"
-        ]
+        tablas = {
+            "riesgos": "Evaluaciones de riesgos",
+            "arco_electrico": "Evaluaciones de arco eléctrico",
+            "etiquetas": "Etiquetas",
+            "loto": "Documentación LOTO",
+            "permisos": "Permisos de trabajo"
+        }
 
         vinculados = {
-            tabla: len(consultar(
+            nombre: len(consultar(
                 tabla,
                 {"proyecto_id": seleccionado}
             ))
-            for tabla in tablas
+            for tabla, nombre in tablas.items()
         }
 
         if sum(vinculados.values()) > 0:
@@ -356,7 +552,11 @@ def mostrar():
                 "asociados y no puede eliminarse."
             )
 
-            st.write(vinculados)
+            for nombre, cantidad in vinculados.items():
+
+                if cantidad:
+
+                    st.write(f"**{nombre}:** {cantidad}")
 
         else:
 
@@ -371,21 +571,37 @@ def mostrar():
                 "Eliminar proyecto",
                 disabled=not confirmar
             ):
+
                 try:
-                    eliminar("proyectos", seleccionado)
+
+                    resultado = eliminar(
+                        "proyectos",
+                        seleccionado
+                    )
+
+                    if not resultado:
+
+                        st.error(
+                            "No se pudo confirmar la eliminación."
+                        )
+
+                        return
 
                     if st.session_state.get(
                         "proyecto_activo"
                     ) == seleccionado:
+
                         st.session_state.pop(
                             "proyecto_activo", None
                         )
 
-                    st.session_state.aviso_proyecto = (
-                        "Proyecto eliminado correctamente."
+                    notificar(
+                        f"Proyecto {proyecto['nombre']} "
+                        "eliminado correctamente."
                     )
 
-                    st.rerun()
-
                 except Exception:
-                    st.error("No se pudo eliminar el proyecto.")
+
+                    st.error(
+                        "No se pudo eliminar el proyecto."
+                    )
