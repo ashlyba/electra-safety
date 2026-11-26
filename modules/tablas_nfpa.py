@@ -1,14 +1,18 @@
 
+import math
+
+
 # ElectraSafety Consultores
-# Referencia: NFPA 70E, edición 2027
-# Datos de la traducción suministrada para el proyecto.
+# Referencia académica: NFPA 70E 2027.
+# Traducción suministrada para el proyecto.
+
 
 TABLA_CA = {
     "Tablero de distribución hasta 240 V": [
         (1, 240, 25, 0.03, 455, 1, 0.485)
     ],
     "Tablero de distribución de más de 240 V hasta 600 V": [
-        (241, 600, 25, 0.03, 455, 2, 0.9)
+        (240, 600, 25, 0.03, 455, 2, 0.9)
     ],
     "Centro de control de motores MCC clase 600 V": [
         (1, 600, 65, 0.03, 455, 2, 1.5),
@@ -31,12 +35,11 @@ TABLA_CA = {
     ],
     "Otros equipos de 1 kV a 15 kV": [
         (1000, 15000, 35, 0.24, 910, 4, 12)
-    ]
+    ],
+    "Equipo resistente al arco hasta clase 600 V": [],
+    "Equipo resistente al arco de 1 kV a 15 kV": []
 }
 
-# Tensión máxima, límite móvil,
-# límite fijo y límite restringido.
-# Distancias expresadas en metros.
 
 CHOQUE_CA = [
     (49, None, None, None),
@@ -57,6 +60,7 @@ CHOQUE_CA = [
     (800000, 7.2, 7.2, 6.9)
 ]
 
+
 CHOQUE_CC = [
     (49, None, None, None),
     (300, 3.1, 1.0, "Evitar contacto"),
@@ -71,6 +75,7 @@ CHOQUE_CC = [
     (800000, 8.0, 8.0, 5.0)
 ]
 
+
 GUANTES = [
     ("00", 500, 750),
     ("0", 1000, 1500),
@@ -80,6 +85,7 @@ GUANTES = [
     ("4", 36000, 54000)
 ]
 
+
 PROTECCION_ARCO = {
     1: 4,
     2: 8,
@@ -88,28 +94,125 @@ PROTECCION_ARCO = {
 }
 
 
+def no_aplicable(motivo):
+
+    return {
+        "aplicable": False,
+        "motivo": motivo,
+        "categoria": None,
+        "frontera": None
+    }
+
+
+def numero_positivo(valor):
+
+    try:
+
+        numero = float(valor)
+
+        if (
+            not math.isfinite(numero)
+            or numero <= 0
+        ):
+
+            return None
+
+        return numero
+
+    except (
+        ValueError,
+        TypeError,
+        OverflowError
+    ):
+
+        return None
+
+
 def calcular_arco(
-    sistema, equipo, voltaje,
-    corriente, tiempo, distancia
+    sistema,
+    equipo,
+    voltaje,
+    corriente,
+    tiempo,
+    distancia
 ):
 
-    if min(voltaje, corriente, tiempo, distancia) <= 0:
-        return {
-            "aplicable": False,
-            "motivo": "Los parámetros deben ser positivos."
-        }
+    if sistema not in ("CA", "CC"):
+
+        return no_aplicable(
+            "Sistema eléctrico no reconocido."
+        )
+
+    parametros = [
+        numero_positivo(voltaje),
+        numero_positivo(corriente),
+        numero_positivo(tiempo),
+        numero_positivo(distancia)
+    ]
+
+    if any(
+        valor is None
+        for valor in parametros
+    ):
+
+        return no_aplicable(
+            "Los parámetros deben ser numéricos, "
+            "finitos y mayores que cero."
+        )
+
+    voltaje, corriente, tiempo, distancia = parametros
 
     if sistema == "CA":
 
-        filas = TABLA_CA.get(equipo, [])
+        if equipo not in TABLA_CA:
+
+            return no_aplicable(
+                "Equipo no incluido en las "
+                "filas implementadas."
+            )
+
+        if equipo.startswith(
+            "Equipo resistente al arco"
+        ):
+
+            return no_aplicable(
+                "La tabla contempla condiciones "
+                "especiales para equipos resistentes "
+                "al arco. Se requiere comprobar "
+                "la clasificación del fabricante "
+                "y las notas aplicables. "
+                "No se asigna categoría automáticamente."
+            )
+
         resultados = []
 
-        for fila in filas:
+        for fila in TABLA_CA[equipo]:
 
-            vmin, vmax, imax, tmax, dmin, cat, frontera = fila
+            (
+                vmin,
+                vmax,
+                imax,
+                tmax,
+                dmin,
+                categoria,
+                frontera
+            ) = fila
+
+            tension_valida = (
+                vmin <= voltaje <= vmax
+            )
+
+            if equipo == (
+                "Tablero de distribución de más "
+                "de 240 V hasta 600 V"
+            ):
+
+                tension_valida = (
+                    240 < voltaje <= 600
+                )
 
             if (
-                vmin <= voltaje <= vmax
+                tension_valida
                 and corriente <= imax
                 and tiempo <= tmax
                 and distancia >= dmin
@@ -117,19 +220,21 @@ def calcular_arco(
 
                 resultados.append({
                     "aplicable": True,
-                    "categoria": cat,
+                    "categoria": categoria,
                     "frontera": frontera,
                     "corriente_maxima": imax,
                     "tiempo_maximo": tmax,
                     "distancia_minima": dmin,
-                    "referencia": "130.7(C)(15)(a)"
+                    "referencia": "130.7(C)(15)(a)",
+                    "metodo": "Método de tablas",
+                    "proteccion_minima": (
+                        PROTECCION_ARCO[categoria]
+                    )
                 })
 
         if resultados:
 
-            # Si coinciden varias filas, se conserva
-            # la alternativa más conservadora.
-            return max(
+            resultado = max(
                 resultados,
                 key=lambda x: (
                     x["categoria"],
@@ -137,82 +242,160 @@ def calcular_arco(
                 )
             )
 
+            resultado["filas_coincidentes"] = len(
+                resultados
+            )
+
+            resultado["observacion"] = (
+                "Coincidencia numérica preliminar. "
+                "Verificar notas, clasificación "
+                "y condiciones del equipo."
+            )
+
+            return resultado
+
     elif sistema == "CC":
 
-        if (
-            equipo == "Baterías y equipos de CC"
-            and 150 < voltaje <= 600
+        if equipo != "Baterías y equipos de CC":
+
+            return no_aplicable(
+                "Equipo de corriente continua "
+                "fuera del alcance implementado."
+            )
+
+        if not (
+            150 < voltaje <= 600
             and tiempo <= 2
             and distancia >= 455
             and corriente < 10
         ):
 
-            if corriente < 1.5:
-                cat, frontera = 2, 0.9
+            return no_aplicable(
+                "Los parámetros no coinciden "
+                "con el alcance de CC implementado."
+            )
 
-            elif corriente < 3:
-                cat, frontera = 2, 1.2
+        if corriente < 1.5:
 
-            elif corriente < 7:
-                cat, frontera = 3, 1.8
+            categoria = 2
+            frontera = 0.9
 
-            else:
-                cat, frontera = 4, 2.5
+        elif corriente < 3:
 
-            return {
-                "aplicable": True,
-                "categoria": cat,
-                "frontera": frontera,
-                "tiempo_maximo": 2,
-                "distancia_minima": 455,
-                "referencia": "130.7(C)(15)(b)"
-            }
+            categoria = 2
+            frontera = 1.2
 
-    return {
-        "aplicable": False,
-        "motivo": (
-            "No se cumplen las condiciones de las "
-            "filas implementadas. No asignar una "
-            "categoría de EPP mediante esta herramienta. "
-            "Se requiere revisión técnica y, cuando "
-            "corresponda, análisis de energía incidente."
-        )
-    }
+        elif corriente < 7:
+
+            categoria = 3
+            frontera = 1.8
+
+        else:
+
+            categoria = 4
+            frontera = 2.5
+
+        return {
+            "aplicable": True,
+            "categoria": categoria,
+            "frontera": frontera,
+            "tiempo_maximo": 2,
+            "distancia_minima": 455,
+            "referencia": "130.7(C)(15)(b)",
+            "metodo": "Método de tablas",
+            "proteccion_minima": (
+                PROTECCION_ARCO[categoria]
+            ),
+            "observacion": (
+                "Resultado preliminar. Verificar "
+                "las condiciones generales y notas "
+                "de la tabla de corriente continua."
+            )
+        }
+
+    return no_aplicable(
+        "No se cumplen las condiciones de las "
+        "filas implementadas. No asignar categoría "
+        "mediante esta herramienta. Se requiere "
+        "revisión técnica especializada."
+    )
 
 
-def limites_choque(sistema, voltaje, movil=False):
+def limites_choque(
+    sistema,
+    voltaje,
+    movil=False
+):
 
-    if sistema not in ("CA", "CC") or voltaje <= 0:
+    voltaje = numero_positivo(voltaje)
+
+    if (
+        sistema not in ("CA", "CC")
+        or voltaje is None
+    ):
+
         return None
 
-    tabla = CHOQUE_CA if sistema == "CA" else CHOQUE_CC
+    tabla = (
+        CHOQUE_CA
+        if sistema == "CA"
+        else CHOQUE_CC
+    )
 
-    for maximo, limite_movil, fijo, restringido in tabla:
+    for (
+        maximo,
+        limite_movil,
+        fijo,
+        restringido
+    ) in tabla:
 
         if voltaje <= maximo:
 
             return {
-                "limitada": limite_movil if movil else fijo,
+                "limitada": (
+                    limite_movil
+                    if movil
+                    else fijo
+                ),
                 "restringida": restringido,
                 "referencia": (
-                    "130.4(E)(a)" if sistema == "CA"
+                    "130.4(E)(a)"
+                    if sistema == "CA"
                     else "130.4(E)(b)"
+                ),
+                "observacion": (
+                    "Referencia preliminar. "
+                    "Verificar notas, altitud y "
+                    "condiciones de exposición."
                 )
             }
 
     return None
 
 
-def clase_guante(sistema, voltaje):
+def clase_guante(
+    sistema,
+    voltaje
+):
 
-    if sistema not in ("CA", "CC") or voltaje <= 0:
+    voltaje = numero_positivo(voltaje)
+
+    if (
+        sistema not in ("CA", "CC")
+        or voltaje is None
+    ):
+
         return None
 
     for clase, ca, cc in GUANTES:
 
-        maximo = ca if sistema == "CA" else cc
+        maximo = (
+            ca if sistema == "CA"
+            else cc
+        )
 
         if voltaje <= maximo:
+
             return clase
 
     return None
