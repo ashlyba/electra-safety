@@ -5,10 +5,10 @@ from datetime import datetime
 from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER
+
 from reportlab.platypus import (
     SimpleDocTemplate,
     Paragraph,
@@ -41,7 +41,7 @@ def texto_seguro(valor):
 
 def pie_pagina(canvas, doc):
 
-    ancho, alto = A4
+    ancho, alto = letter
 
     canvas.setStrokeColor(AMARILLO)
     canvas.line(40, 48, ancho - 40, 48)
@@ -71,7 +71,7 @@ def generar_pdf(
 
     doc = SimpleDocTemplate(
         memoria,
-        pagesize=A4,
+        pagesize=letter,
         rightMargin=40,
         leftMargin=40,
         topMargin=35,
@@ -83,8 +83,8 @@ def generar_pdf(
     estilos.add(ParagraphStyle(
         name="TituloElectra",
         fontName="Helvetica-Bold",
-        fontSize=19,
-        leading=24,
+        fontSize=18,
+        leading=23,
         textColor=AZUL,
         alignment=TA_CENTER,
         spaceAfter=15
@@ -114,9 +114,7 @@ def generar_pdf(
 
         imagen = Image(str(LOGO))
 
-        proporcion = (
-            imagen.imageHeight / imagen.imageWidth
-        )
+        proporcion = imagen.imageHeight / imagen.imageWidth
 
         imagen.drawWidth = 230
         imagen.drawHeight = 230 * proporcion
@@ -169,8 +167,10 @@ def generar_pdf(
 
         tabla = Table(
             filas,
-            colWidths=[135, 380],
-            hAlign="LEFT"
+            colWidths=[145, 375],
+            hAlign="LEFT",
+            splitByRow=1,
+            splitInRow=1
         )
 
         tabla.setStyle(TableStyle([
