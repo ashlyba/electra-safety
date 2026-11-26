@@ -6,16 +6,19 @@ from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.styles import (
+    getSampleStyleSheet,
+    ParagraphStyle
+)
 from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.utils import ImageReader
 
 from reportlab.platypus import (
     SimpleDocTemplate,
     Paragraph,
     Spacer,
     Table,
-    TableStyle,
-    Image
+    TableStyle
 )
 
 from database import consultar
@@ -24,8 +27,12 @@ from database import consultar
 AZUL = colors.HexColor("#0C2335")
 AMARILLO = colors.HexColor("#FFB900")
 GRIS = colors.HexColor("#F1F5F9")
+BORDE = colors.HexColor("#CBD5E1")
 
-LOGO = Path(__file__).resolve().parent.parent / "logo.png"
+LOGO = (
+    Path(__file__).resolve().parent.parent
+    / "logo.png"
+)
 
 
 def texto_seguro(valor):
@@ -33,31 +40,162 @@ def texto_seguro(valor):
     if valor is None or valor == "":
         return "No registrado"
 
-    if isinstance(valor, list):
-        valor = "; ".join(str(v) for v in valor)
+    if isinstance(valor, bool):
+        return "Sí" if valor else "No"
 
-    return escape(str(valor)).replace("\n", "<br/>")
+    if isinstance(valor, dict):
+
+        valor = "\n".join(
+            f"{campo}: {contenido}"
+            for campo, contenido in valor.items()
+        )
+
+    elif isinstance(valor, (list, tuple)):
+
+        valor = "\n".join(
+            str(elemento)
+            for elemento in valor
+        )
+
+    return escape(
+        str(valor)
+    ).replace("\n", "<br/>")
 
 
 def pie_pagina(canvas, doc):
 
     ancho, alto = letter
 
+    canvas.saveState()
+
     canvas.setStrokeColor(AMARILLO)
-    canvas.line(40, 48, ancho - 40, 48)
+    canvas.setLineWidth(1.5)
+
+    canvas.line(
+        40, 48,
+        ancho - 40, 48
+    )
 
     canvas.setFillColor(AZUL)
     canvas.setFont("Helvetica", 8)
 
     canvas.drawString(
-        40, 33,
+        40, 34,
         "ElectraSafety Consultores | Electra Safe 360"
     )
 
     canvas.drawRightString(
-        ancho - 40, 33,
+        ancho - 40, 34,
         f"Página {doc.page}"
     )
+
+    canvas.setFont("Helvetica", 7)
+
+    canvas.drawString(
+        40, 22,
+        "Documento académico de apoyo técnico"
+    )
+
+    canvas.restoreState()
+
+
+def encabezado_pagina(canvas, doc):
+
+    ancho, alto = letter
+
+    canvas.saveState()
+
+    canvas.setFillColor(AZUL)
+
+    canvas.rect(
+        0,
+        alto - 82,
+        ancho,
+        82,
+        fill=1,
+        stroke=0
+    )
+
+    if LOGO.exists():
+
+        try:
+
+            imagen = ImageReader(str(LOGO))
+
+            w, h = imagen.getSize()
+
+            factor = min(
+                140 / w,
+                55 / h
+            )
+
+            canvas.drawImage(
+                imagen,
+                40,
+                alto - 68,
+                width=w * factor,
+                height=h * factor,
+                mask="auto"
+            )
+
+        except Exception:
+
+            canvas.setFillColor(colors.white)
+            canvas.setFont("Helvetica-Bold", 14)
+
+            canvas.drawString(
+                40,
+                alto - 43,
+                "Electra Safe 360"
+            )
+
+    else:
+
+        canvas.setFillColor(colors.white)
+        canvas.setFont("Helvetica-Bold", 14)
+
+        canvas.drawString(
+            40,
+            alto - 43,
+            "Electra Safe 360"
+        )
+
+    canvas.setFillColor(colors.white)
+
+    canvas.setFont(
+        "Helvetica-Bold", 11
+    )
+
+    canvas.drawRightString(
+        ancho - 40,
+        alto - 33,
+        "ElectraSafety Consultores"
+    )
+
+    canvas.setFont(
+        "Helvetica", 9
+    )
+
+    canvas.drawRightString(
+        ancho - 40,
+        alto - 49,
+        "Gestión de seguridad eléctrica"
+    )
+
+    canvas.setFillColor(AMARILLO)
+
+    canvas.rect(
+        0,
+        alto - 86,
+        ancho,
+        4,
+        fill=1,
+        stroke=0
+    )
+
+    canvas.restoreState()
+
+    pie_pagina(canvas, doc)
 
 
 def generar_pdf(
@@ -74,53 +212,64 @@ def generar_pdf(
         pagesize=letter,
         rightMargin=40,
         leftMargin=40,
-        topMargin=35,
-        bottomMargin=65
+        topMargin=105,
+        bottomMargin=65,
+        title=str(titulo),
+        author="ElectraSafety Consultores",
+        subject="Gestión de seguridad eléctrica"
     )
 
     estilos = getSampleStyleSheet()
 
-    estilos.add(ParagraphStyle(
-        name="TituloElectra",
-        fontName="Helvetica-Bold",
-        fontSize=18,
-        leading=23,
-        textColor=AZUL,
-        alignment=TA_CENTER,
-        spaceAfter=15
-    ))
+    estilos.add(
+        ParagraphStyle(
+            name="TituloElectra",
+            fontName="Helvetica-Bold",
+            fontSize=18,
+            leading=23,
+            textColor=AZUL,
+            alignment=TA_CENTER,
+            spaceAfter=18
+        )
+    )
 
-    estilos.add(ParagraphStyle(
-        name="SeccionElectra",
-        fontName="Helvetica-Bold",
-        fontSize=12,
-        leading=16,
-        textColor=AZUL,
-        spaceBefore=12,
-        spaceAfter=8,
-        keepWithNext=True
-    ))
+    estilos.add(
+        ParagraphStyle(
+            name="SeccionElectra",
+            fontName="Helvetica-Bold",
+            fontSize=12,
+            leading=16,
+            textColor=AZUL,
+            spaceBefore=12,
+            spaceAfter=8,
+            keepWithNext=True
+        )
+    )
 
-    estilos.add(ParagraphStyle(
-        name="CeldaElectra",
-        fontName="Helvetica",
-        fontSize=9,
-        leading=13
-    ))
+    estilos.add(
+        ParagraphStyle(
+            name="CeldaElectra",
+            fontName="Helvetica",
+            fontSize=9,
+            leading=13,
+            splitLongWords=True
+        )
+    )
+
+    estilos.add(
+        ParagraphStyle(
+            name="NotaElectra",
+            fontName="Helvetica",
+            fontSize=8,
+            leading=12,
+            textColor=colors.HexColor(
+                "#475569"
+            ),
+            spaceAfter=8
+        )
+    )
 
     elementos = []
-
-    if LOGO.exists():
-
-        imagen = Image(str(LOGO))
-
-        proporcion = imagen.imageHeight / imagen.imageWidth
-
-        imagen.drawWidth = 230
-        imagen.drawHeight = 230 * proporcion
-
-        elementos.append(imagen)
-        elementos.append(Spacer(1, 15))
 
     elementos.append(
         Paragraph(
@@ -129,17 +278,35 @@ def generar_pdf(
         )
     )
 
-    clientes = consultar(
-        "clientes",
-        {"id": proyecto["cliente_id"]}
-    )
+    proyecto = proyecto or {}
 
-    cliente = clientes[0] if clientes else {}
+    cliente = {}
+
+    if proyecto.get("cliente_id"):
+
+        clientes = consultar(
+            "clientes",
+            {
+                "id": proyecto["cliente_id"]
+            }
+        )
+
+        cliente = (
+            clientes[0]
+            if clientes
+            else {}
+        )
 
     informacion = {
-        "Cliente": cliente.get("nombre_empresa"),
-        "Proyecto": proyecto.get("nombre"),
-        "Código": proyecto.get("codigo"),
+        "Cliente": cliente.get(
+            "nombre_empresa"
+        ),
+        "Proyecto": proyecto.get(
+            "nombre"
+        ),
+        "Código del proyecto": proyecto.get(
+            "codigo"
+        ),
         "Fecha de emisión": datetime.now().strftime(
             "%d/%m/%Y"
         )
@@ -147,13 +314,24 @@ def generar_pdf(
 
     def agregar_tabla(campos):
 
+        if not campos:
+            return
+
+        if not isinstance(campos, dict):
+
+            campos = {
+                "Información": campos
+            }
+
         filas = []
 
         for nombre, valor in campos.items():
 
             filas.append([
                 Paragraph(
-                    "<b>" + texto_seguro(nombre) + "</b>",
+                    "<b>"
+                    + texto_seguro(nombre)
+                    + "</b>",
                     estilos["CeldaElectra"]
                 ),
                 Paragraph(
@@ -162,30 +340,76 @@ def generar_pdf(
                 )
             ])
 
-        if not filas:
-            return
-
         tabla = Table(
             filas,
-            colWidths=[145, 375],
+            colWidths=[
+                doc.width * 0.30,
+                doc.width * 0.70
+            ],
             hAlign="LEFT",
             splitByRow=1,
             splitInRow=1
         )
 
-        tabla.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (0, -1), GRIS),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("GRID", (0, 0), (-1, -1), 0.35,
-             colors.HexColor("#CBD5E1")),
-            ("LEFTPADDING", (0, 0), (-1, -1), 8),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-            ("TOPPADDING", (0, 0), (-1, -1), 7),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 7)
-        ]))
+        tabla.setStyle(
+            TableStyle([
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (0, -1),
+                    GRIS
+                ),
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "TOP"
+                ),
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.35,
+                    BORDE
+                ),
+                (
+                    "LEFTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    8
+                ),
+                (
+                    "RIGHTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    8
+                ),
+                (
+                    "TOPPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    7
+                ),
+                (
+                    "BOTTOMPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    7
+                )
+            ])
+        )
 
         elementos.append(tabla)
-        elementos.append(Spacer(1, 10))
+        elementos.append(
+            Spacer(1, 10)
+        )
+
+    elementos.append(
+        Paragraph(
+            "Identificación del proyecto",
+            estilos["SeccionElectra"]
+        )
+    )
 
     agregar_tabla(informacion)
 
@@ -212,25 +436,28 @@ def generar_pdf(
         elementos.append(
             Paragraph(
                 texto_seguro(referencia),
-                estilos["Normal"]
+                estilos["NotaElectra"]
             )
         )
 
-    elementos.append(Spacer(1, 15))
+    elementos.append(
+        Spacer(1, 15)
+    )
 
     elementos.append(
         Paragraph(
             "Documento académico de apoyo. "
-            "No constituye una autorización de trabajo "
-            "ni sustituye la revisión de una persona calificada.",
-            estilos["Normal"]
+            "No constituye una autorización "
+            "de trabajo ni sustituye la revisión "
+            "de una persona calificada.",
+            estilos["NotaElectra"]
         )
     )
 
     doc.build(
         elementos,
-        onFirstPage=pie_pagina,
-        onLaterPages=pie_pagina
+        onFirstPage=encabezado_pagina,
+        onLaterPages=encabezado_pagina
     )
 
     memoria.seek(0)
