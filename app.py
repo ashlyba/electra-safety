@@ -1,9 +1,9 @@
 
 import streamlit as st
+import logging
 
 from pathlib import Path
 from importlib import import_module
-import logging
 
 from database import (
     iniciar_sesion,
@@ -15,19 +15,20 @@ from database import (
 from modules.estilos import aplicar_estilos
 
 
+BASE_DIR = Path(__file__).resolve().parent
+LOGO = BASE_DIR / "logo.png"
+
+VERSION = "0.4"
+
 st.set_page_config(
-    page_title="Electra Safe 360",
-    page_icon="⚡",
+    page_title="Electra Safe 360 | ElectraSafety Consultores",
+    page_icon=str(LOGO) if LOGO.exists() else None,
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 aplicar_estilos()
 
-BASE_DIR = Path(__file__).resolve().parent
-LOGO = BASE_DIR / "logo.png"
-
-VERSION = "0.4"
 
 INTEGRANTES = [
     "Pendiente de completar"
@@ -36,61 +37,53 @@ INTEGRANTES = [
 
 MODULOS = {
     "Inicio": {
-        "icono": "🏠",
-        "descripcion": "Panel de gestión"
+        "descripcion": "Panel general de gestión"
     },
     "01. Clientes": {
-        "icono": "🏢",
         "descripcion": (
-            "Administración de empresas "
-            "y contactos comerciales."
+            "Registro, consulta y administración "
+            "de empresas y contactos."
         ),
         "ruta": "clientes"
     },
     "02. Proyectos": {
-        "icono": "📁",
         "descripcion": (
-            "Organización y seguimiento "
-            "de proyectos eléctricos."
+            "Creación, organización y seguimiento "
+            "de proyectos de seguridad eléctrica."
         ),
         "ruta": "proyectos"
     },
     "03. Riesgos eléctricos": {
-        "icono": "🛡️",
         "descripcion": (
-            "Identificación de peligros, "
-            "valoración y medidas de control."
+            "Identificación de peligros, valoración "
+            "de riesgos y medidas de control."
         ),
         "ruta": "riesgos"
     },
     "04. Arco eléctrico y EPP": {
-        "icono": "⚡",
         "descripcion": (
-            "Evaluación de arco, choque "
-            "eléctrico y protección personal."
+            "Evaluación de arco eléctrico, choque, "
+            "fronteras y equipos de protección personal."
         ),
         "ruta": "arco_electrico"
     },
     "05. Etiquetas": {
-        "icono": "🏷️",
         "descripcion": (
-            "Diseño, registro e impresión "
-            "de etiquetas eléctricas."
+            "Diseño, registro y generación "
+            "de etiquetas de seguridad eléctrica."
         ),
         "ruta": "etiquetas"
     },
     "06. Bloqueo y etiquetado LOTO": {
-        "icono": "🔒",
         "descripcion": (
-            "Gestión documental del control "
-            "de energías peligrosas."
+            "Control de energías peligrosas, "
+            "procedimientos y dispositivos de bloqueo."
         ),
         "ruta": "loto"
     },
     "07. Permisos de trabajo": {
-        "icono": "📋",
         "descripcion": (
-            "Gestión de permisos eléctricos "
+            "Gestión documental de trabajos eléctricos "
             "energizados y desenergizados."
         ),
         "ruta": "permisos"
@@ -124,11 +117,10 @@ def mostrar_login():
                 use_container_width=True
             )
 
-        st.title("Bienvenido a Electra Safe 360")
+        st.title("Electra Safe 360")
 
         st.write(
-            "Plataforma de gestión de "
-            "seguridad eléctrica."
+            "Sistema de gestión de seguridad eléctrica"
         )
 
         with st.form("login"):
@@ -184,13 +176,12 @@ def mostrar_login():
                     )
 
         st.caption(
-            "Acceso autorizado | "
-            "ElectraSafety Consultores"
+            "ElectraSafety Consultores | "
+            "Acceso autorizado"
         )
 
         st.caption(
-            "NFPA 70E 2027 | "
-            f"Versión {VERSION}"
+            f"NFPA 70E 2027 | Versión {VERSION}"
         )
 
 
@@ -201,10 +192,11 @@ if "usuario" not in st.session_state:
     st.stop()
 
 
-# RECUPERAR PROYECTO ACTIVO
+# RECUPERAR INFORMACIÓN
 
 proyectos = []
 clientes = {}
+conexion_correcta = True
 
 try:
 
@@ -217,8 +209,10 @@ try:
 
 except Exception:
 
+    conexion_correcta = False
+
     logging.exception(
-        "No se pudieron consultar proyectos"
+        "Error al recuperar información"
     )
 
 
@@ -230,19 +224,17 @@ activo = st.session_state.get(
     "proyecto_activo"
 )
 
-if activo not in opciones:
+if conexion_correcta and activo not in opciones:
 
     activo = (
         proyectos[0]["id"]
         if proyectos else None
     )
 
-    st.session_state[
-        "proyecto_activo"
-    ] = activo
+    st.session_state["proyecto_activo"] = activo
 
 
-# MENU LATERAL
+# MENÚ LATERAL
 
 with st.sidebar:
 
@@ -256,19 +248,14 @@ with st.sidebar:
     st.markdown("### Electra Safe 360")
 
     st.caption(
-        "SISTEMA DE GESTIÓN ELÉCTRICA"
+        "Sistema de gestión de seguridad eléctrica"
     )
 
     st.divider()
 
     pagina = st.radio(
-        "ESPACIO DE TRABAJO",
+        "NAVEGACIÓN",
         list(MODULOS),
-        format_func=lambda x: (
-            MODULOS[x]["icono"]
-            + "  "
-            + x
-        ),
         key="pagina"
     )
 
@@ -281,7 +268,8 @@ with st.sidebar:
         proyecto = opciones[activo]
 
         cliente = clientes.get(
-            proyecto["cliente_id"], {}
+            proyecto["cliente_id"],
+            {}
         )
 
         st.write(
@@ -291,7 +279,19 @@ with st.sidebar:
             )
         )
 
-        st.caption(proyecto["nombre"])
+        st.caption(
+            proyecto.get("nombre", "")
+        )
+
+        st.caption(
+            proyecto.get("codigo", "")
+        )
+
+    elif not conexion_correcta:
+
+        st.caption(
+            "Información temporalmente no disponible"
+        )
 
     else:
 
@@ -303,7 +303,9 @@ with st.sidebar:
 
     st.caption("SESIÓN ACTIVA")
 
-    st.write(st.session_state.usuario)
+    st.write(
+        st.session_state.usuario
+    )
 
     if st.button(
         "Cerrar sesión",
@@ -313,6 +315,7 @@ with st.sidebar:
         try:
 
             cerrar_sesion()
+
             st.rerun()
 
         except Exception:
@@ -322,12 +325,11 @@ with st.sidebar:
             )
 
     st.caption(
-        f"Versión {VERSION} | "
-        "Proyecto académico"
+        f"Versión {VERSION} | Proyecto académico"
     )
 
 
-# FUNCIONES DE INICIO
+# TARJETAS DE NAVEGACIÓN
 
 def tarjeta(nombre):
 
@@ -335,10 +337,6 @@ def tarjeta(nombre):
 
     st.html(f"""
     <div class="modulo">
-        <div style="font-size:28px;
-                    margin-bottom:12px;">
-            {datos["icono"]}
-        </div>
         <div class="modulo-titulo">
             {nombre}
         </div>
@@ -347,13 +345,15 @@ def tarjeta(nombre):
     """)
 
     st.button(
-        "Acceder al módulo →",
+        "Acceder al módulo",
         key=f"abrir_{nombre}",
         on_click=navegar,
         args=(nombre,),
         use_container_width=True
     )
 
+
+# PANTALLA PRINCIPAL
 
 def mostrar_inicio():
 
@@ -363,7 +363,7 @@ def mostrar_inicio():
             Electra Safe 360
         </div>
         <div class="banner-subtitulo">
-            Plataforma integral para la evaluación,
+            Sistema integral para la evaluación,
             documentación y gestión de la
             seguridad eléctrica.
         </div>
@@ -375,7 +375,7 @@ def mostrar_inicio():
     </div>
     """)
 
-    st.subheader("Panel de gestión")
+    st.subheader("Resumen general")
 
     try:
 
@@ -405,7 +405,7 @@ def mostrar_inicio():
         )
 
         st.caption(
-            "● Conexión con la base de datos establecida."
+            "Conexión con la base de datos establecida."
         )
 
     except Exception:
@@ -428,6 +428,7 @@ def mostrar_inicio():
             )
 
             if actual not in ids:
+
                 actual = ids[0]
 
             st.session_state[
@@ -450,7 +451,8 @@ def mostrar_inicio():
                         opciones[x]["cliente_id"],
                         {}
                     ).get(
-                        "nombre_empresa", "Cliente"
+                        "nombre_empresa",
+                        "Cliente"
                     )
                     + " | "
                     + opciones[x]["nombre"]
@@ -465,6 +467,17 @@ def mostrar_inicio():
                 "Código: " + p["codigo"]
             )
 
+            st.write(
+                p.get("descripcion") or
+                "Sin descripción registrada."
+            )
+
+        elif not conexion_correcta:
+
+            st.warning(
+                "No se pudieron consultar los proyectos."
+            )
+
         else:
 
             st.info(
@@ -477,9 +490,11 @@ def mostrar_inicio():
     c1, c2 = st.columns(2)
 
     with c1:
+
         tarjeta("01. Clientes")
 
     with c2:
+
         tarjeta("02. Proyectos")
 
     st.subheader("Herramientas técnicas")
@@ -501,60 +516,52 @@ def mostrar_inicio():
 
     st.divider()
 
-    c1, c2 = st.columns(2)
+    with st.expander(
+        "Acerca de Electra Safe 360"
+    ):
 
-    with c1:
+        st.write(
+            "Maletín digital desarrollado como "
+            "herramienta de apoyo a la gestión "
+            "de la seguridad eléctrica."
+        )
 
-        with st.expander(
-            "Acerca de Electra Safe 360"
-        ):
+        st.write(
+            "Referencia normativa: NFPA 70E, "
+            "edición 2027."
+        )
 
-            st.write(
-                "Maletín digital de apoyo "
-                "a la gestión de la seguridad "
-                "eléctrica."
-            )
+        st.warning(
+            "Aplicación académica. Los resultados "
+            "requieren revisión por personal "
+            "calificado antes de su utilización real."
+        )
 
-            st.write(
-                "Referencia: NFPA 70E, "
-                "edición 2027."
-            )
+    with st.expander(
+        "Equipo de desarrollo"
+    ):
 
-            st.warning(
-                "Aplicación académica. "
-                "No sustituye la evaluación "
-                "de personal calificado."
-            )
+        for integrante in INTEGRANTES:
 
-    with c2:
+            st.write(integrante)
 
-        with st.expander(
-            "Equipo de desarrollo"
-        ):
-
-            for integrante in INTEGRANTES:
-
-                st.write(integrante)
-
-            st.caption(
-                "ElectraSafety Consultores"
-            )
+        st.caption(
+            "ElectraSafety Consultores"
+        )
 
     with st.expander(
         "Tecnologías utilizadas"
     ):
 
-        st.write(
-            "Python · Streamlit · Supabase "
-            "· GitHub · ReportLab"
-        )
-
-        st.write(
-            "Inteligencia artificial: ChatGPT"
-        )
+        st.write("Programación: Python")
+        st.write("Interfaz: Streamlit")
+        st.write("Base de datos: Supabase")
+        st.write("Control de versiones: GitHub")
+        st.write("Documentación PDF: ReportLab")
+        st.write("Inteligencia artificial: ChatGPT")
 
 
-# CARGAR PANTALLA
+# CARGAR MÓDULO SELECCIONADO
 
 if pagina == "Inicio":
 
@@ -567,7 +574,7 @@ else:
     )
 
     st.button(
-        "← Volver al panel principal",
+        "Volver al panel principal",
         on_click=navegar,
         args=("Inicio",),
         key="volver_inicio"
@@ -589,8 +596,7 @@ else:
         )
 
         st.caption(
-            "Consulta los registros de "
-            "Streamlit para identificar el error."
+            "Consulta los registros de Streamlit."
         )
 
         logging.exception(
@@ -599,12 +605,14 @@ else:
         )
 
 
+# PIE DE PÁGINA
+
 st.html(f"""
 <div class="pie">
     <strong>ElectraSafety Consultores</strong>
     <br>
-    Electra Safe 360 · Seguridad eléctrica
-    · Versión {VERSION}
+    Electra Safe 360 | Seguridad eléctrica
+    | Versión {VERSION}
     <br>
     Herramienta académica
 </div>
