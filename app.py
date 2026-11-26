@@ -1,8 +1,17 @@
 
 import streamlit as st
-from pathlib import Path
 
-# CONFIGURACIÓN GENERAL
+from pathlib import Path
+from database import (
+    conectar,
+    iniciar_sesion,
+    cerrar_sesion,
+    consultar,
+    contar
+)
+
+from modules import clientes, proyectos
+
 
 st.set_page_config(
     page_title="Electra Safety | Maletín Digital",
@@ -14,98 +23,185 @@ st.set_page_config(
 BASE_DIR = Path(__file__).resolve().parent
 LOGO = BASE_DIR / "logo.png"
 
-# IDENTIDAD VISUAL
+
+# DISEÑO CORPORATIVO
 
 st.markdown("""
 <style>
-    .stApp {
-        background-color: #F5F5F5;
-    }
 
-    [data-testid="stSidebar"] {
-        background-color: #0C2335;
-    }
+.stApp {
+    background-color: #F5F5F5;
+}
 
-    [data-testid="stSidebar"] label,
-    [data-testid="stSidebar"] p,
-    [data-testid="stSidebar"] h2,
-    [data-testid="stSidebar"] h3,
-    [data-testid="stSidebar"] span {
-        color: #FFFFFF;
-    }
+[data-testid="stSidebar"] {
+    background-color: #0C2335;
+}
 
-    h1, h2, h3 {
-        color: #0C2335;
-    }
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3,
+[data-testid="stSidebar"] span {
+    color: #FFFFFF;
+}
 
-    .banner {
-        background-color: #0C2335;
-        padding: 32px;
-        border-radius: 14px;
-        border-left: 8px solid #FFB900;
-        margin-bottom: 24px;
-    }
+.block-container {
+    padding-top: 2.5rem;
+    padding-bottom: 2rem;
+}
 
-    .banner h1 {
-        color: #FFFFFF;
-        margin: 0;
-    }
+.banner {
+    background: #0C2335;
+    border-left: 8px solid #FFB900;
+    padding: 28px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+}
 
-    .banner p {
-        color: #E2E8F0;
-    }
+.banner-titulo {
+    font-size: 34px;
+    font-weight: 750;
+    color: #FFFFFF !important;
+    margin-bottom: 10px;
+}
 
-    .modulo {
-        background-color: #FFFFFF;
-        border-radius: 12px;
-        padding: 20px;
-        border-top: 4px solid #FFB900;
-        min-height: 155px;
-        margin-bottom: 10px;
-        box-shadow: 0 2px 6px #0000000D;
-    }
+.banner-subtitulo {
+    color: #E2E8F0 !important;
+    font-size: 16px;
+}
 
-    .modulo h3 {
-        font-size: 19px;
-        margin-top: 0;
-    }
+.banner-norma {
+    color: #FFB900 !important;
+    font-weight: 600;
+    font-size: 14px;
+    margin-top: 14px;
+}
 
-    .modulo p {
-        color: #526575;
-        font-size: 14px;
-    }
+.modulo {
+    background: #FFFFFF;
+    border-top: 4px solid #FFB900;
+    border-radius: 10px;
+    padding: 18px;
+    min-height: 170px;
+    margin-top: 8px;
+    box-shadow: 0 2px 6px #0000000D;
+}
 
-    .stButton > button {
-        border-radius: 8px;
-        border: 1px solid #FFB900;
-        font-weight: 600;
-        width: 100%;
-    }
+.modulo-titulo {
+    color: #0C2335;
+    font-size: 18px;
+    font-weight: 700;
+}
 
-    .pie {
-        color: #64748B;
-        font-size: 12px;
-        text-align: center;
-        padding: 20px;
-    }
+.modulo p {
+    color: #526575;
+    font-size: 14px;
+}
+
+.estado-activo {
+    color: #18754A;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.estado-pendiente {
+    color: #8C6500;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.stButton > button {
+    border-radius: 8px;
+    font-weight: 600;
+    width: 100%;
+}
+
+.pie {
+    text-align: center;
+    font-size: 12px;
+    color: #64748B;
+    padding: 20px;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
-# MÓDULOS DEL MALETÍN
+
+# INICIO DE SESIÓN
+
+if "usuario" not in st.session_state:
+
+    izquierda, centro, derecha = st.columns([1, 2, 1])
+
+    with centro:
+
+        if LOGO.exists():
+            st.image(str(LOGO), use_container_width=True)
+
+        st.title("Electra Safe 360")
+
+        st.write(
+            "Maletín digital de seguridad eléctrica"
+        )
+
+        with st.form("login"):
+
+            correo = st.text_input("Correo electrónico")
+
+            password = st.text_input(
+                "Contraseña",
+                type="password"
+            )
+
+            entrar = st.form_submit_button(
+                "Iniciar sesión",
+                type="primary",
+                use_container_width=True
+            )
+
+            if entrar:
+
+                try:
+                    if iniciar_sesion(correo, password):
+                        st.rerun()
+                    else:
+                        st.error("No se pudo iniciar sesión.")
+
+                except Exception:
+                    st.error(
+                        "No se pudo iniciar sesión. "
+                        "Verifica tus credenciales y la conexión."
+                    )
+
+        st.caption(
+            "ElectraSafety Consultores | NFPA 70E 2027"
+        )
+
+    st.stop()
+
+
+# DEFINICIÓN DE MÓDULOS
 
 modulos = {
     "Inicio": "Panel principal",
-    "01. Clientes": "Registro y administración de clientes.",
+    "01. Clientes": "Registro y administración de empresas.",
     "02. Proyectos": "Creación y seguimiento de proyectos.",
-    "03. Riesgos eléctricos": "Evaluación de peligros, riesgos y controles.",
-    "04. Arco eléctrico y EPP": "Categorías de EPP y fronteras de protección.",
-    "05. Etiquetas": "Generación de etiquetas de seguridad eléctrica.",
-    "06. Bloqueo y etiquetado LOTO": "Gestión del control de energías peligrosas.",
-    "07. Permisos de trabajo": "Permisos de trabajo energizado y desenergizado."
+    "03. Riesgos eléctricos": "Evaluación de peligros y controles.",
+    "04. Arco eléctrico y EPP": "EPP y fronteras de protección.",
+    "05. Etiquetas": "Etiquetas para equipos eléctricos.",
+    "06. Bloqueo y etiquetado LOTO": "Control de energías peligrosas.",
+    "07. Permisos de trabajo": "Gestión del trabajo eléctrico."
 }
+
+implementados = [
+    "01. Clientes",
+    "02. Proyectos"
+]
+
 
 def navegar(destino):
     st.session_state["pagina"] = destino
+
 
 # MENÚ LATERAL
 
@@ -117,20 +213,58 @@ with st.sidebar:
         st.header("Electra Safety")
 
     st.markdown("### Maletín digital")
-    st.caption("Seguridad eléctrica | NFPA 70E 2027")
+
+    st.caption("NFPA 70E | Edición 2027")
 
     st.divider()
 
     pagina = st.radio(
         "NAVEGACIÓN",
-        list(modulos.keys()),
+        list(modulos),
         key="pagina"
     )
 
     st.divider()
 
-    st.caption("ElectraSafety Consultores")
-    st.caption("Versión 0.1 | Desarrollo académico")
+    st.markdown("### Proyecto activo")
+
+    proyecto_id = st.session_state.get("proyecto_activo")
+
+    if proyecto_id:
+
+        try:
+            registros = consultar(
+                "proyectos",
+                {"id": proyecto_id}
+            )
+
+            if registros:
+                st.write(registros[0]["nombre"])
+                st.caption(registros[0]["codigo"])
+            else:
+                st.session_state.pop("proyecto_activo", None)
+                st.caption("Sin proyecto activo")
+
+        except Exception:
+            st.caption("No se pudo consultar el proyecto")
+
+    else:
+        st.caption("Sin proyecto activo")
+
+    st.divider()
+
+    st.caption(st.session_state.usuario)
+
+    if st.button("Cerrar sesión"):
+
+        try:
+            cerrar_sesion()
+            st.rerun()
+        except Exception:
+            st.error("No se pudo cerrar la sesión.")
+
+    st.caption("Versión 0.2 | Proyecto académico")
+
 
 # PANTALLA PRINCIPAL
 
@@ -138,28 +272,62 @@ if pagina == "Inicio":
 
     st.markdown("""
     <div class="banner">
-        <h1>Electra Safe 360</h1>
-        <p>Maletín digital de herramientas para la gestión
-        de la seguridad eléctrica.</p>
-        <p>NFPA 70E | Edición 2027</p>
+        <div class="banner-titulo">
+            Electra Safe 360
+        </div>
+        <div class="banner-subtitulo">
+            Maletín digital de herramientas para
+            la gestión de la seguridad eléctrica.
+        </div>
+        <div class="banner-norma">
+            NFPA 70E | Edición 2027
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
     st.subheader("Panel general")
 
-    c1, c2, c3 = st.columns(3)
+    try:
 
-    c1.metric("Módulos disponibles", "7")
-    c2.metric("Edición normativa", "2027")
-    c3.metric("Versión", "0.1")
+        total_clientes = contar("clientes")
+        total_proyectos = contar("proyectos")
+        total_evaluaciones = contar("riesgos") + contar(
+            "arco_electrico"
+        )
 
-    st.info(
-        "Aplicación académica en desarrollo. "
-        "Las herramientas técnicas serán habilitadas "
-        "después de su implementación y validación."
-    )
+        c1, c2, c3, c4 = st.columns(4)
+
+        c1.metric("Clientes", total_clientes)
+        c2.metric("Proyectos", total_proyectos)
+        c3.metric("Evaluaciones", total_evaluaciones)
+        c4.metric("Módulos habilitados", "2 de 7")
+
+        st.success("Conexión con la base de datos establecida.")
+
+    except Exception:
+
+        st.error(
+            "No se pudo establecer la conexión "
+            "con la base de datos."
+        )
 
     st.divider()
+
+    c1, c2 = st.columns(2)
+
+    with c1:
+        st.button(
+            "Registrar o consultar clientes",
+            on_click=navegar,
+            args=("01. Clientes",)
+        )
+
+    with c2:
+        st.button(
+            "Crear o consultar proyectos",
+            on_click=navegar,
+            args=("02. Proyectos",)
+        )
 
     st.subheader("Herramientas de seguridad eléctrica")
 
@@ -170,15 +338,34 @@ if pagina == "Inicio":
         columnas = st.columns(3)
 
         for columna, (nombre, descripcion) in zip(
-            columnas, herramientas[i:i+3]
+            columnas,
+            herramientas[i:i+3]
         ):
+
             with columna:
+
+                activo = nombre in implementados
+
+                clase = (
+                    "estado-activo"
+                    if activo else "estado-pendiente"
+                )
+
+                estado = (
+                    "HABILITADO"
+                    if activo else "EN DESARROLLO"
+                )
 
                 st.markdown(
                     f"""
                     <div class="modulo">
-                        <h3>{nombre}</h3>
+                        <div class="modulo-titulo">
+                            {nombre}
+                        </div>
                         <p>{descripcion}</p>
+                        <div class="{clase}">
+                            {estado}
+                        </div>
                     </div>
                     """,
                     unsafe_allow_html=True
@@ -186,24 +373,29 @@ if pagina == "Inicio":
 
                 st.button(
                     "Abrir herramienta",
-                    key=f"btn_{nombre}",
+                    key=f"abrir_{nombre}",
                     on_click=navegar,
                     args=(nombre,)
                 )
 
     st.divider()
 
-    st.subheader("Acerca del maletín")
+    with st.expander("Acerca del maletín"):
 
-    st.write(
-        "Electra Safe 360 es una herramienta digital "
-        "desarrollada para apoyar la evaluación y gestión "
-        "de la seguridad eléctrica en los lugares de trabajo."
-    )
+        st.write(
+            "Electra Safe 360 es una herramienta "
+            "académica de apoyo a la gestión de "
+            "la seguridad eléctrica."
+        )
 
-    st.write(
-        "Referencia normativa: NFPA 70E, edición 2027."
-    )
+        st.write(
+            "Referencia normativa: NFPA 70E, edición 2027."
+        )
+
+        st.warning(
+            "Las funciones técnicas requieren validación "
+            "profesional antes de su aplicación real."
+        )
 
     with st.expander("Equipo de desarrollo"):
 
@@ -214,22 +406,49 @@ if pagina == "Inicio":
 
     with st.expander("Herramientas utilizadas"):
 
-        st.write("Inteligencia artificial: ChatGPT.")
-        st.write("Lenguaje de programación: Python.")
-        st.write("Interfaz: Streamlit.")
-        st.write("Control de versiones: GitHub.")
+        st.write("Inteligencia artificial: ChatGPT")
+        st.write("Programación: Python")
+        st.write("Interfaz: Streamlit")
+        st.write("Base de datos: Supabase")
+        st.write("Control de versiones: GitHub")
 
-# PÁGINAS DE LOS MÓDULOS
+
+# MÓDULO 1
+
+elif pagina == "01. Clientes":
+
+    try:
+        clientes.mostrar()
+    except Exception:
+        st.error(
+            "No se pudo cargar el módulo de clientes. "
+            "Verifica la conexión."
+        )
+
+
+# MÓDULO 2
+
+elif pagina == "02. Proyectos":
+
+    try:
+        proyectos.mostrar()
+    except Exception:
+        st.error(
+            "No se pudo cargar el módulo de proyectos. "
+            "Verifica la conexión."
+        )
+
+
+# MÓDULOS PENDIENTES
 
 else:
 
     st.title(pagina)
+
     st.write(modulos[pagina])
 
-    st.divider()
-
     st.warning(
-        "Este módulo se encuentra en desarrollo. "
+        "Herramienta en desarrollo. "
         "Todavía no genera resultados técnicos."
     )
 
@@ -239,12 +458,14 @@ else:
         args=("Inicio",)
     )
 
+
 # PIE DE PÁGINA
 
 st.markdown("""
 <div class="pie">
     ElectraSafety Consultores |
     Electra Safe 360 |
-    Proyecto académico de Seguridad Eléctrica
+    Seguridad Eléctrica
 </div>
 """, unsafe_allow_html=True)
+
