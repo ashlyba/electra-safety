@@ -22,9 +22,9 @@ LOGO = BASE_DIR / "logo.png"
 VERSION = "1.0"
 
 INTEGRANTES = [
-    "Ashly Barrantes"
-    "Nicole Valverde"
-    "Xochilt Velasquez"
+    "Ashly Barrantes",
+    "Nicole Valverde",
+    "Xochilt Velasquez",
     "Cristian Fonseca"
 ]
 
@@ -398,66 +398,105 @@ with st.sidebar:
     )
 
 
-if st.session_state.get(
-    "confirmar_salida"
-):
+@st.dialog(
+    "Confirmar cierre de sesión",
+    dismissible=False
+)
+def dialogo_salida():
 
-    with st.container(border=True):
+    st.warning(
+        "Guarde los cambios antes de cerrar sesión."
+    )
 
-        st.warning(
-            "Guarde los cambios antes de cerrar sesión."
-        )
+    c1, c2 = st.columns(2)
 
-        c1, c2 = st.columns(2)
+    if c1.button(
+        "Confirmar cierre",
+        type="primary",
+        use_container_width=True
+    ):
 
-        if c1.button(
-            "Confirmar cierre",
-            type="primary"
-        ):
+        try:
 
             cerrar_sesion()
-            st.rerun()
 
-        if c2.button("Cancelar"):
+        except Exception:
 
-            st.session_state.pop(
-                "confirmar_salida",
-                None
+            logging.exception(
+                "Error al cerrar sesión"
             )
 
-            st.rerun()
+            st.error(
+                "No se pudo cerrar la sesión. "
+                "Intente nuevamente."
+            )
 
+            return
 
-if st.session_state.get(
-    "destino_pendiente"
-):
+        st.rerun()
 
-    with st.container(border=True):
+    if c2.button(
+        "Cancelar",
+        use_container_width=True
+    ):
 
-        st.warning(
-            "Los cambios sin guardar podrían perderse "
-            "al abandonar este módulo."
+        st.session_state.pop(
+            "confirmar_salida",
+            None
         )
 
-        st.write(
-            "Destino: "
-            + st.session_state["destino_pendiente"]
-        )
+        st.rerun()
 
-        c1, c2 = st.columns(2)
 
-        c1.button(
-            "Continuar",
-            type="primary",
-            on_click=confirmar_navegacion,
-            use_container_width=True
-        )
+@st.dialog(
+    "Confirmar cambio de módulo",
+    dismissible=False
+)
+def dialogo_navegacion():
 
-        c2.button(
-            "Permanecer en el módulo",
-            on_click=cancelar_navegacion,
-            use_container_width=True
-        )
+    st.warning(
+        "Los cambios sin guardar podrían perderse "
+        "al abandonar este módulo."
+    )
+
+    st.write(
+        "Módulo actual: "
+        + st.session_state["pagina_actual"]
+    )
+
+    st.write(
+        "Destino: "
+        + st.session_state["destino_pendiente"]
+    )
+
+    c1, c2 = st.columns(2)
+
+    if c1.button(
+        "Continuar",
+        type="primary",
+        use_container_width=True
+    ):
+
+        confirmar_navegacion()
+        st.rerun()
+
+    if c2.button(
+        "Permanecer",
+        use_container_width=True
+    ):
+
+        cancelar_navegacion()
+        st.rerun()
+
+
+if st.session_state.get("confirmar_salida"):
+
+    cancelar_navegacion()
+    dialogo_salida()
+
+elif st.session_state.get("destino_pendiente"):
+
+    dialogo_navegacion()
 
 
 def tarjeta(nombre):
