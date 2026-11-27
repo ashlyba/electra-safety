@@ -124,7 +124,8 @@ def mostrar_ilustracion():
 
 def mostrar_guia_epp(
     categoria=None,
-    clave="guia_epp"
+    clave="guia_epp",
+    anterior=None
 ):
 
     st.subheader(
@@ -143,7 +144,44 @@ def mostrar_guia_epp(
             key=f"{clave}_categoria"
         )
 
+    anterior = anterior or {}
+
     requerida = CLASIFICACIONES[categoria]
+
+    rostro = {
+        1: "Pantalla AR o capucha AR",
+        2: "Capucha AR o pantalla AR y pasamontañas AR",
+        3: "Capucha de traje AR",
+        4: "Capucha de traje AR"
+    }[categoria]
+
+    manos = (
+        "Guantes AR o aislantes de caucho con protectores"
+        if categoria >= 3
+        else "Guantes de cuero pesado, AR o aislantes con protectores"
+    )
+
+    componentes = [
+        ("Cabeza", "Casco"),
+        ("Ojos", "Gafas de seguridad o cerradas"),
+        ("Rostro", rostro),
+        ("Oídos", "Tapones auditivos insertados"),
+        (
+            "Cuerpo",
+            "Conjunto de ropa AR de clasificación requerida"
+        ),
+        ("Manos", manos),
+        (
+            "Pies",
+            "Calzado de cuero" + (
+                " según necesidad"
+                if categoria == 1
+                else ""
+            )
+        )
+    ]
+
+    verificados = {}
 
     c1, c2 = st.columns([1, 1.5])
 
@@ -167,7 +205,9 @@ def mostrar_guia_epp(
             "Clasificación del conjunto "
             "seleccionado (cal/cm²)",
             min_value=0.0,
-            value=0.0,
+            value=float(
+                anterior.get("Clasificación", 0)
+            ),
             step=1.0,
             key=f"{clave}_clasificacion"
         )
@@ -206,7 +246,7 @@ def mostrar_guia_epp(
 
     st.dataframe(
         pd.DataFrame(
-            COMPONENTES,
+            componentes,
             columns=[
                 "Zona corporal",
                 "Elemento de protección"
@@ -222,16 +262,22 @@ def mostrar_guia_epp(
         "las notas y las condiciones normativas."
     )
 
-    for zona, elemento in COMPONENTES:
+    for zona, elemento in componentes:
 
-        st.checkbox(
+        verificados[zona] = st.checkbox(
             f"Verificación documental: {elemento}",
+            value=anterior.get(
+                "Componentes", {}
+            ).get(zona, False),
             key=f"{clave}_{zona}"
         )
 
-    st.text_area(
+    observaciones = st.text_area(
         "Fabricante, modelo, certificación "
         "y observaciones",
+        value=anterior.get(
+            "Observaciones", ""
+        ),
         key=f"{clave}_observaciones"
     )
 
@@ -245,6 +291,22 @@ def mostrar_guia_epp(
         "Herramienta académica. No constituye "
         "una autorización de trabajo."
     )
+
+    return {
+        "Categoría": categoria,
+        "Clasificación": seleccionada,
+        "Componentes": verificados,
+        "Observaciones": observaciones,
+        "Estado": (
+            "Verificación documental preliminar"
+            if (
+                seleccionada >= requerida
+                and all(verificados.values())
+                and observaciones.strip()
+            )
+            else "Incompleta"
+        )
+    }
 
 
 def mostrar():
