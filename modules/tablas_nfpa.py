@@ -3,46 +3,61 @@ import math
 
 
 # ElectraSafety Consultores
+# Electra Safe 360
 # Referencia académica: NFPA 70E 2027.
-# Traducción suministrada para el proyecto.
+# Método de categorías de EPP.
 
 
 TABLA_CA = {
     "Tablero de distribución hasta 240 V": [
         (1, 240, 25, 0.03, 455, 1, 0.485)
     ],
+
     "Tablero de distribución de más de 240 V hasta 600 V": [
         (240, 600, 25, 0.03, 455, 2, 0.9)
     ],
+
     "Centro de control de motores MCC clase 600 V": [
         (1, 600, 65, 0.03, 455, 2, 1.5),
         (1, 600, 42, 0.33, 455, 4, 4.3)
     ],
+
     "Equipo de maniobra o cuadro de distribución clase 600 V": [
         (1, 600, 35, 0.5, 455, 4, 6)
     ],
+
     "Otros equipos clase 600 V": [
         (277, 600, 65, 0.03, 455, 2, 1.5)
     ],
+
     "Arrancador de motores NEMA E2": [
         (2300, 7200, 35, 0.24, 910, 4, 12)
     ],
+
     "Equipo de maniobra metal-clad": [
         (1000, 15000, 35, 0.24, 910, 4, 12)
     ],
+
     "Interruptores en envolvente metálica": [
         (1000, 15000, 35, 0.24, 910, 4, 12)
     ],
+
     "Otros equipos de 1 kV a 15 kV": [
         (1000, 15000, 35, 0.24, 910, 4, 12)
     ],
+
     "Equipo resistente al arco hasta clase 600 V": [],
+
     "Equipo resistente al arco de 1 kV a 15 kV": []
 }
 
 
+# Límites de aproximación por choque eléctrico.
+# Voltaje máximo, conductor móvil, parte fija,
+# límite de aproximación restringida.
+# Distancias expresadas en metros.
+
 CHOQUE_CA = [
-    (49, None, None, None),
     (150, 3.1, 1.0, "Evitar contacto"),
     (750, 3.1, 1.0, 0.31),
     (5000, 3.1, 1.0, 0.63),
@@ -62,7 +77,6 @@ CHOQUE_CA = [
 
 
 CHOQUE_CC = [
-    (49, None, None, None),
     (300, 3.1, 1.0, "Evitar contacto"),
     (1000, 3.1, 1.0, 0.3),
     (5000, 3.1, 1.5, 0.5),
@@ -76,6 +90,9 @@ CHOQUE_CC = [
 ]
 
 
+# Clase de guante y tensión máxima de utilización.
+# Clase, voltaje CA, voltaje CC.
+
 GUANTES = [
     ("00", 500, 750),
     ("0", 1000, 1500),
@@ -85,6 +102,9 @@ GUANTES = [
     ("4", 36000, 54000)
 ]
 
+
+# Clasificación mínima de protección contra arco.
+# Valores expresados en cal/cm2.
 
 PROTECCION_ARCO = {
     1: 4,
@@ -110,20 +130,17 @@ def numero_positivo(valor):
 
         numero = float(valor)
 
-        if (
-            not math.isfinite(numero)
-            or numero <= 0
-        ):
+        if not math.isfinite(numero):
+
+            return None
+
+        if numero <= 0:
 
             return None
 
         return numero
 
-    except (
-        ValueError,
-        TypeError,
-        OverflowError
-    ):
+    except (ValueError, TypeError, OverflowError):
 
         return None
 
@@ -150,10 +167,7 @@ def calcular_arco(
         numero_positivo(distancia)
     ]
 
-    if any(
-        valor is None
-        for valor in parametros
-    ):
+    if any(valor is None for valor in parametros):
 
         return no_aplicable(
             "Los parámetros deben ser numéricos, "
@@ -167,20 +181,15 @@ def calcular_arco(
         if equipo not in TABLA_CA:
 
             return no_aplicable(
-                "Equipo no incluido en las "
-                "filas implementadas."
+                "Equipo no incluido en las tablas."
             )
 
-        if equipo.startswith(
-            "Equipo resistente al arco"
-        ):
+        if equipo.startswith("Equipo resistente al arco"):
 
             return no_aplicable(
-                "La tabla contempla condiciones "
-                "especiales para equipos resistentes "
-                "al arco. Se requiere comprobar "
-                "la clasificación del fabricante "
-                "y las notas aplicables. "
+                "Se requiere comprobar la clasificación "
+                "del fabricante y las condiciones "
+                "especiales de la tabla. "
                 "No se asigna categoría automáticamente."
             )
 
@@ -198,18 +207,14 @@ def calcular_arco(
                 frontera
             ) = fila
 
-            tension_valida = (
-                vmin <= voltaje <= vmax
-            )
+            tension_valida = vmin <= voltaje <= vmax
 
             if equipo == (
                 "Tablero de distribución de más "
                 "de 240 V hasta 600 V"
             ):
 
-                tension_valida = (
-                    240 < voltaje <= 600
-                )
+                tension_valida = 240 < voltaje <= 600
 
             if (
                 tension_valida
@@ -227,9 +232,8 @@ def calcular_arco(
                     "distancia_minima": dmin,
                     "referencia": "130.7(C)(15)(a)",
                     "metodo": "Método de tablas",
-                    "proteccion_minima": (
+                    "proteccion_minima":
                         PROTECCION_ARCO[categoria]
-                    )
                 })
 
         if resultados:
@@ -246,11 +250,22 @@ def calcular_arco(
                 resultados
             )
 
-            resultado["observacion"] = (
-                "Coincidencia numérica preliminar. "
-                "Verificar notas, clasificación "
-                "y condiciones del equipo."
-            )
+            if len(resultados) > 1:
+
+                resultado["observacion"] = (
+                    "Coinciden varias filas. Se muestra "
+                    "la alternativa más conservadora. "
+                    "Debe verificarse la fila aplicable "
+                    "antes de aprobar el resultado."
+                )
+
+            else:
+
+                resultado["observacion"] = (
+                    "Coincidencia numérica preliminar. "
+                    "Verificar notas, clasificación "
+                    "y condiciones del equipo."
+                )
 
             return resultado
 
@@ -272,7 +287,7 @@ def calcular_arco(
 
             return no_aplicable(
                 "Los parámetros no coinciden "
-                "con el alcance de CC implementado."
+                "con el alcance de corriente continua."
             )
 
         if corriente < 1.5:
@@ -303,13 +318,11 @@ def calcular_arco(
             "distancia_minima": 455,
             "referencia": "130.7(C)(15)(b)",
             "metodo": "Método de tablas",
-            "proteccion_minima": (
-                PROTECCION_ARCO[categoria]
-            ),
+            "proteccion_minima":
+                PROTECCION_ARCO[categoria],
             "observacion": (
                 "Resultado preliminar. Verificar "
-                "las condiciones generales y notas "
-                "de la tabla de corriente continua."
+                "las condiciones y notas de la tabla."
             )
         }
 
@@ -336,35 +349,41 @@ def limites_choque(
 
         return None
 
+    referencia = (
+        "130.4(E)(a)"
+        if sistema == "CA"
+        else "130.4(E)(b)"
+    )
+
+    if voltaje < 50:
+
+        return {
+            "limitada": None,
+            "restringida": None,
+            "referencia": referencia,
+            "observacion": (
+                "Sin distancia tabulada para este "
+                "intervalo de tensión. Esto no implica "
+                "ausencia de peligros eléctricos."
+            )
+        }
+
     tabla = (
         CHOQUE_CA
         if sistema == "CA"
         else CHOQUE_CC
     )
 
-    for (
-        maximo,
-        limite_movil,
-        fijo,
-        restringido
-    ) in tabla:
+    for maximo, limite_movil, fijo, restringido in tabla:
 
         if voltaje <= maximo:
 
             return {
-                "limitada": (
-                    limite_movil
-                    if movil
-                    else fijo
-                ),
+                "limitada":
+                    limite_movil if movil else fijo,
                 "restringida": restringido,
-                "referencia": (
-                    "130.4(E)(a)"
-                    if sistema == "CA"
-                    else "130.4(E)(b)"
-                ),
+                "referencia": referencia,
                 "observacion": (
-                    "Referencia preliminar. "
                     "Verificar notas, altitud y "
                     "condiciones de exposición."
                 )
@@ -373,10 +392,7 @@ def limites_choque(
     return None
 
 
-def clase_guante(
-    sistema,
-    voltaje
-):
+def clase_guante(sistema, voltaje):
 
     voltaje = numero_positivo(voltaje)
 
@@ -389,13 +405,266 @@ def clase_guante(
 
     for clase, ca, cc in GUANTES:
 
-        maximo = (
-            ca if sistema == "CA"
-            else cc
-        )
+        maximo = ca if sistema == "CA" else cc
 
         if voltaje <= maximo:
 
             return clase
 
     return None
+
+
+# Evaluación de la probabilidad de ocurrencia
+# de un incidente de arco eléctrico.
+# Tarea, condición del equipo, probabilidad.
+
+
+TAREAS_ARCO = [
+
+    (
+        "Lectura de un medidor de panel mientras "
+        "se opera un interruptor del medidor.",
+        "Cualquiera",
+        "No"
+    ),
+
+    (
+        "Termografía infrarroja y otras inspecciones "
+        "sin contacto fuera del límite restringido, "
+        "sin apertura de puertas o cubiertas.",
+        "Cualquiera",
+        "No"
+    ),
+
+    (
+        "Trabajo en circuitos de control de hasta "
+        "125 V CA o CC, sin otros equipos energizados "
+        "expuestos de tensión superior.",
+        "Cualquiera",
+        "No"
+    ),
+
+    (
+        "Examen de cables aislados sin manipulación.",
+        "Cualquiera",
+        "No"
+    ),
+
+    (
+        "Mantenimiento de una sola celda de baterías "
+        "o unidades multicelda en bastidor abierto.",
+        "Cualquiera",
+        "No"
+    ),
+
+    (
+        "Trabajo en equipos de baterías de menos "
+        "de 600 V con separación entre conductores "
+        "expuestos superior a 1 mm por voltio.",
+        "Cualquiera",
+        "No"
+    ),
+
+    (
+        "Trabajo en conductores energizados de CA "
+        "y partes de circuitos, incluidas pruebas.",
+        "Cualquiera",
+        "Sí"
+    ),
+
+    (
+        "Primera operación de un interruptor "
+        "después de su instalación o mantenimiento.",
+        "Cualquiera",
+        "Sí"
+    ),
+
+    (
+        "Trabajo en conductores energizados de CC "
+        "de celdas de baterías conectadas en serie, "
+        "incluidas pruebas eléctricas.",
+        "Cualquiera",
+        "Sí"
+    ),
+
+    (
+        "Retirada o instalación de interruptores "
+        "automáticos o interruptores.",
+        "Cualquiera",
+        "Sí"
+    ),
+
+    (
+        "Apertura o retirada de puertas y cubiertas "
+        "que expongan conductores energizados desnudos "
+        "o partes de circuitos.",
+        "Cualquiera",
+        "Sí"
+    ),
+
+    (
+        "Aplicación de puesta a tierra temporal "
+        "de protección después de la prueba de tensión.",
+        "Cualquiera",
+        "Sí"
+    ),
+
+    (
+        "Trabajo en circuitos de control con "
+        "conductores energizados expuestos "
+        "de más de 120 V.",
+        "Cualquiera",
+        "Sí"
+    ),
+
+    (
+        "Inserción o extracción de unidades "
+        "arrancadoras de un MCC.",
+        "Cualquiera",
+        "Sí"
+    ),
+
+    (
+        "Inserción o extracción de interruptores "
+        "o arrancadores de sus compartimentos.",
+        "Cualquiera",
+        "Sí"
+    ),
+
+    (
+        "Inserción o extracción de dispositivos "
+        "enchufables en canalizaciones de barras.",
+        "Cualquiera",
+        "Sí"
+    ),
+
+    (
+        "Examen de cables aislados con manipulación.",
+        "Cualquiera",
+        "Sí"
+    ),
+
+    (
+        "Trabajo en conductores energizados expuestos "
+        "de equipos alimentados directamente por "
+        "tableros de distribución o MCC.",
+        "Cualquiera",
+        "Sí"
+    ),
+
+    (
+        "Inserción o extracción de medidores "
+        "de facturación kWh a tensión y corriente primarias.",
+        "Cualquiera",
+        "Sí"
+    ),
+
+    (
+        "Inserción o extracción de cubiertas "
+        "de conectores entre celdas de baterías.",
+        "Cualquiera",
+        "Sí"
+    ),
+
+    (
+        "Trabajo en conductores energizados expuestos "
+        "de equipos alimentados directamente "
+        "por una fuente de CC.",
+        "Cualquiera",
+        "Sí"
+    ),
+
+    (
+        "Apertura de compartimentos de transformadores "
+        "de tensión o alimentación de control.",
+        "Cualquiera",
+        "Sí"
+    ),
+
+    (
+        "Operación de desconexión exterior mediante "
+        "pértiga de 1 kV a 15 kV.",
+        "Cualquiera",
+        "Sí"
+    ),
+
+    (
+        "Operación de desconexión exterior de "
+        "accionamiento conjunto desde el suelo, "
+        "de 1 kV a 15 kV.",
+        "Cualquiera",
+        "Sí"
+    ),
+
+    (
+        "Operación de interruptor automático, "
+        "interruptor, contactor o arrancador.",
+        "Normal / Anormal",
+        "No / Sí"
+    ),
+
+    (
+        "Pruebas de tensión en celdas individuales "
+        "o unidades multicelda individuales.",
+        "Normal / Anormal",
+        "No / Sí"
+    ),
+
+    (
+        "Retirada o instalación de cubiertas "
+        "sin exposición de conductores energizados "
+        "desnudos ni partes de circuitos.",
+        "Normal / Anormal",
+        "No / Sí"
+    ),
+
+    (
+        "Apertura de puertas de tableros para acceder "
+        "a dispositivos de sobrecorriente de frente muerto.",
+        "Normal / Anormal",
+        "No / Sí"
+    ),
+
+    (
+        "Retirada de cubiertas no conductoras "
+        "de conectores entre celdas de baterías.",
+        "Normal / Anormal",
+        "No / Sí"
+    ),
+
+    (
+        "Mantenimiento y pruebas de celdas individuales "
+        "o unidades multicelda en bastidor abierto.",
+        "Normal / Anormal",
+        "No / Sí"
+    ),
+
+    (
+        "Inserción o extracción de celdas individuales "
+        "o unidades multicelda en bastidor abierto.",
+        "Normal / Anormal",
+        "No / Sí"
+    )
+]
+
+
+def probabilidad_arco(indice, estado):
+
+    if not isinstance(indice, int):
+
+        return None
+
+    if not 0 <= indice < len(TAREAS_ARCO):
+
+        return None
+
+    valor = TAREAS_ARCO[indice][2]
+
+    if valor == "No / Sí":
+
+        return {
+            "Normal": False,
+            "Anormal": True
+        }.get(estado)
+
+    return valor == "Sí"
