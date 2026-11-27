@@ -39,6 +39,7 @@ CONTROLES = [
 ]
 
 METODO = "Matriz P × S 5 × 5 de uso académico"
+
 CRITERIOS_PROBABILIDAD = {
     1: "Exposición excepcional y controles existentes eficaces.",
     2: "Exposición ocasional y condiciones poco favorables al daño.",
@@ -46,10 +47,12 @@ CRITERIOS_PROBABILIDAD = {
     4: "Exposición frecuente o controles de eficacia limitada.",
     5: "Exposición recurrente con condiciones que favorecen el daño."
 }
+
 PELIGROS = [
     "Choque eléctrico", "Arco eléctrico", "Quemaduras por contacto",
     "Onda de presión", "Incendio o explosión", "Energía almacenada", "Otro"
 ]
+
 NIVELES = (
     (4, "Bajo", "#238B57", "Mantener controles y revisar."),
     (9, "Moderado", "#D4A017", "Evaluar medidas adicionales."),
@@ -59,8 +62,11 @@ NIVELES = (
 
 
 def nivel_riesgo(valor):
-    return next((nivel, color, criterio)
-                for maximo, nivel, color, criterio in NIVELES if valor <= maximo)
+    return next(
+        (nivel, color, criterio)
+        for maximo, nivel, color, criterio in NIVELES
+        if valor <= maximo
+    )
 
 
 def escala(valor):
@@ -71,9 +77,7 @@ def escala(valor):
     return int(valor) if isinstance(valor, Integral) and 1 <= valor <= 5 else None
 
 
-
 def clasificar(p, s):
-
     p, s = escala(p), escala(s)
     if p is None or s is None:
         raise ValueError("La probabilidad y la severidad deben ser enteros de 1 a 5.")
@@ -105,12 +109,10 @@ def revisar_detalle(detalle):
 
 
 def tarjeta_riesgo(p, s):
-
     if escala(p) is None or escala(s) is None:
         st.warning("Puntuación incompleta. Edite el registro para revisarla.")
         return
     valor, nivel, color, criterio = clasificar(p, s)
-
     st.markdown(
         f"""
         <div style="background:{color};
@@ -124,12 +126,10 @@ def tarjeta_riesgo(p, s):
 
 
 def matriz_visual():
-
     datos = [
         [p * s for s in range(1, 6)]
         for p in range(5, 0, -1)
     ]
-
     tabla = pd.DataFrame(
         datos,
         index=[5, 4, 3, 2, 1],
@@ -137,22 +137,15 @@ def matriz_visual():
     )
 
     def color_celda(valor):
-
         _, color, _ = nivel_riesgo(valor)
         return f"background-color:{color};color:white"
 
     st.caption("Filas: probabilidad | Columnas: severidad")
-
-    st.dataframe(
-        tabla.style.map(color_celda),
-        use_container_width=True
-    )
-
+    st.dataframe(tabla.style.map(color_celda), use_container_width=True)
     st.caption(
         "Bajo: 1–4 | Moderado: 5–9 | "
         "Alto: 10–16 | Crítico: 17–25"
     )
-
     st.caption(
         "P × S usa escalas ordinales académicas. El artículo 110.3(H) establece "
         "el proceso y la jerarquía. El Anexo F ofrece orientación informativa."
@@ -160,28 +153,21 @@ def matriz_visual():
 
 
 def nueva_evaluacion(proyecto):
-
     with st.form(f"nueva_evaluacion_{proyecto['id']}"):
-
         nombre = st.text_input("Nombre de la evaluación *")
         area = st.text_input("Área o instalación")
         evaluador = st.text_input("Profesional evaluador")
         fecha = st.date_input("Fecha", date.today())
         observaciones = st.text_area("Observaciones")
 
-        guardar = st.form_submit_button(
-            "Crear evaluación",
-            type="primary"
-        )
+        guardar = st.form_submit_button("Crear evaluación", type="primary")
 
         if guardar:
-
             if not nombre.strip():
                 st.error("Indica el nombre de la evaluación.")
                 return
 
             try:
-
                 resultado = insertar("evaluaciones", {
                     "proyecto_id": proyecto["id"],
                     "nombre": nombre.strip(),
@@ -193,13 +179,9 @@ def nueva_evaluacion(proyecto):
                 })
 
                 if resultado:
-                    notificar(
-                        "riesgos",
-                        "Evaluación creada exitosamente."
-                    )
+                    notificar("riesgos", "Evaluación creada exitosamente.")
 
             except Exception as error:
-
                 if "23505" in str(error):
                     st.warning("Esta evaluación ya existe.")
                 else:
@@ -207,13 +189,11 @@ def nueva_evaluacion(proyecto):
 
 
 def formulario_riesgo(proyecto, evaluacion, registro=None):
-
     registro = registro or {}
     anterior = registro.get("detalle") or {}
     clave = f"{proyecto['id']}_{evaluacion['id']}_{registro.get('id', 'nuevo')}"
 
     with st.form("riesgo_" + clave):
-
         st.subheader("1. Identificación del peligro")
 
         equipo = st.text_input(
@@ -285,9 +265,7 @@ def formulario_riesgo(proyecto, evaluacion, registro=None):
         st.subheader("3. Jerarquía de controles")
 
         medidas = {}
-
         for control in CONTROLES:
-
             medidas[control] = st.text_area(
                 control,
                 value=anterior.get(control, ""),
@@ -364,12 +342,10 @@ def formulario_riesgo(proyecto, evaluacion, registro=None):
         fundamento.strip(), justificacion.strip(), error_humano.strip(),
         justificacion_jerarquia.strip()
     ]):
-
         st.error("Completa todos los campos obligatorios.")
         return
 
     if not any(v.strip() for v in medidas.values()):
-
         st.error("Documenta al menos una medida de control.")
         return
 
@@ -392,7 +368,7 @@ def formulario_riesgo(proyecto, evaluacion, registro=None):
 
     detalle = {
         "Equipo": equipo,
-        "Tarea": tarea,
+        "Tarea": tarea.strip(),
         "Peligro": peligro,
         "Mecanismo de daño": mecanismo,
         "Error humano": error_humano,
@@ -426,43 +402,32 @@ def formulario_riesgo(proyecto, evaluacion, registro=None):
     datos = {
         "proyecto_id": proyecto["id"],
         "evaluacion_id": evaluacion["id"],
+        "tarea": detalle["Tarea"],
         "detalle": detalle
     }
 
     try:
-
         if registro.get("id"):
-
-            resultado = actualizar(
-                "riesgos",
-                registro["id"],
-                datos
-            )
-
+            resultado = actualizar("riesgos", registro["id"], datos)
         else:
-
             resultado = insertar("riesgos", datos)
 
         if resultado:
             notificar("riesgos", "Riesgo guardado exitosamente.")
-
         else:
             st.error("No se pudo confirmar el guardado.")
 
     except Exception as error:
-
         st.error(str(error))
 
 
 def mostrar():
-
     st.title("03. Evaluación de riesgos eléctricos")
 
     advertencia_tecnica()
     mostrar_aviso("riesgos")
 
     proyecto = seleccionar_proyecto("riesgos")
-
     if not proyecto:
         return
 
@@ -484,7 +449,6 @@ def mostrar():
     )
 
     if not evaluaciones:
-
         st.info("Crea una evaluación para comenzar.")
         return
 
@@ -537,7 +501,6 @@ def mostrar():
         formulario_riesgo(proyecto, evaluacion)
 
     with pestana2:
-
         if not registros:
             st.info("No hay peligros registrados.")
             return
@@ -566,10 +529,7 @@ def mostrar():
         ]
 
         for i, detalle in enumerate(detalles, 1):
-
-            secciones.append(
-                (f"Peligro {i}", detalle)
-            )
+            secciones.append((f"Peligro {i}", detalle))
 
         pdf = generar_pdf(
             "Informe de evaluación de riesgos eléctricos",
@@ -620,7 +580,6 @@ def mostrar():
             )
 
         if revisar_detalle(detalle)["Interpretación residual"] != "Valoración posterior documentada":
-
             st.warning(
                 "El riesgo residual es una estimación. "
                 "Los controles aún no han sido verificados."
@@ -633,30 +592,15 @@ def mostrar():
         )
 
         if accion == "Ver información":
-
             for campo, valor in detalle.items():
                 st.write(f"**{campo}:** {valor or '-'}")
 
         elif accion == "Editar":
-
-            formulario_riesgo(
-                proyecto, evaluacion, registro
-            )
+            formulario_riesgo(proyecto, evaluacion, registro)
 
         elif accion == "Eliminar":
+            confirmar = st.checkbox("Confirmo la eliminación del peligro")
 
-            confirmar = st.checkbox(
-                "Confirmo la eliminación del peligro"
-            )
-
-            if st.button(
-                "Eliminar peligro",
-                disabled=not confirmar
-            ):
-
+            if st.button("Eliminar peligro", disabled=not confirmar):
                 if eliminar("riesgos", riesgo_id):
-
-                    notificar(
-                        "riesgos",
-                        "Peligro eliminado correctamente."
-                    )
+                    notificar("riesgos", "Peligro eliminado correctamente.")
