@@ -1,14 +1,10 @@
-
 import streamlit as st
 import pandas as pd
 
+from modules.tablas_nfpa import PROTECCION_ARCO
 
-CLASIFICACIONES = {
-    1: 4,
-    2: 8,
-    3: 25,
-    4: 40
-}
+
+CLASIFICACIONES = PROTECCION_ARCO
 
 
 COMPONENTES = [
@@ -25,7 +21,6 @@ COMPONENTES = [
 
 
 def mostrar_ilustracion():
-
     st.html("""
     <svg viewBox="0 0 440 450"
          width="100%"
@@ -127,7 +122,6 @@ def mostrar_guia_epp(
     clave="guia_epp",
     anterior=None
 ):
-
     st.subheader(
         "Equipos de protección personal"
     )
@@ -137,7 +131,6 @@ def mostrar_guia_epp(
     )
 
     if categoria not in CLASIFICACIONES:
-
         categoria = st.selectbox(
             "Categoría de protección",
             [1, 2, 3, 4],
@@ -149,8 +142,8 @@ def mostrar_guia_epp(
     requerida = CLASIFICACIONES[categoria]
 
     rostro = {
-        1: "Pantalla AR o capucha AR",
-        2: "Capucha AR o pantalla AR y pasamontañas AR",
+        1: "Pantalla facial envolvente AR o capucha AR",
+        2: "Capucha AR o pantalla facial envolvente AR y pasamontañas AR",
         3: "Capucha de traje AR",
         4: "Capucha de traje AR"
     }[categoria]
@@ -165,10 +158,11 @@ def mostrar_guia_epp(
         ("Cabeza", "Casco"),
         ("Ojos", "Gafas de seguridad o cerradas"),
         ("Rostro", rostro),
-        ("Oídos", "Tapones auditivos insertados"),
+        ("Oídos", "Tapones auditivos insertados o alternativa permitida bajo capucha AR"),
         (
             "Cuerpo",
-            "Conjunto de ropa AR de clasificación requerida"
+            "Camisa de manga larga y pantalón AR u overol AR"
+            if categoria <= 2 else "Prendas AR que formen un conjunto con clasificación comprobada"
         ),
         ("Manos", manos),
         (
@@ -186,11 +180,9 @@ def mostrar_guia_epp(
     c1, c2 = st.columns([1, 1.5])
 
     with c1:
-
         mostrar_ilustracion()
 
     with c2:
-
         st.metric(
             "Categoría de EPP",
             categoria
@@ -205,29 +197,24 @@ def mostrar_guia_epp(
             "Clasificación del conjunto "
             "seleccionado (cal/cm²)",
             min_value=0.0,
-            value=float(
-                anterior.get("Clasificación", 0)
-            ),
+            value=float(anterior.get("Clasificación") or 0),
             step=1.0,
             key=f"{clave}_clasificacion"
         )
 
         if seleccionada == 0:
-
             st.info(
                 "Ingrese la clasificación indicada "
                 "por el fabricante."
             )
 
         elif seleccionada < requerida:
-
             st.error(
                 "Clasificación inferior al mínimo "
                 "correspondiente a la categoría."
             )
 
         else:
-
             st.success(
                 "La clasificación ingresada "
                 "alcanza el mínimo numérico."
@@ -262,15 +249,44 @@ def mostrar_guia_epp(
         "las notas y las condiciones normativas."
     )
 
-    for zona, elemento in componentes:
-
-        verificados[zona] = st.checkbox(
-            f"Verificación documental: {elemento}",
-            value=anterior.get(
-                "Componentes", {}
-            ).get(zona, False),
-            key=f"{clave}_{zona}"
+    with st.expander("Notas de aplicación de la tabla"):
+        st.write(
+            "AR significa con clasificación contra arco. La Tabla 130.7(C)(15)(c) "
+            "permite prendas de una capa o un conjunto multicapa probado como combinación. "
+            "El casco, la protección ocular y la protección auditiva se evalúan con la tarea."
         )
+        st.write(
+            "Si la parte posterior de la cabeza está dentro de la frontera, revise 130.7(C)(10)(b). "
+            "Las capas exteriores y el calzado alternativo se revisan con las notas c y f. "
+            "El calzado alternativo requiere evidencia de pruebas de ignición, fusión y goteo."
+        )
+        st.write(
+            "La clase orientativa de guante del punto debe contrastarse con la tensión de "
+            "exposición, los protectores, la necesidad de mangas y las pruebas de "
+            "130.7(C)(7). Identifique estos controles por separado."
+        )
+        st.write(
+            "Para las clases 00, 0, 1, 2, 3 y 4, las separaciones mínimas entre puños "
+            "son 13, 13, 25, 51, 76 y 102 mm, respectivamente, según 130.7(C)(7)(a). "
+            "Revisa inspección, prueba de aire y pruebas eléctricas; la Tabla 130.7(C)(7)(b) "
+            "fija seis meses para guantes en servicio."
+        )
+
+    for zona, elemento in componentes:
+        if zona == "Pies" and categoria == 1:
+            verificados[zona] = st.selectbox(
+                f"Verificación documental: {elemento}",
+                ["Pendiente", "Verificado", "No corresponde en esta tarea"],
+                index={True: 1, "Verificado": 1, "No corresponde en esta tarea": 2}
+                .get((anterior.get("Componentes") or {}).get(zona), 0),
+                key=f"{clave}_{zona}"
+            )
+        else:
+            verificados[zona] = st.checkbox(
+                f"Verificación documental: {elemento}",
+                value=(anterior.get("Componentes") or {}).get(zona) is True,
+                key=f"{clave}_{zona}"
+            )
 
     observaciones = st.text_area(
         "Fabricante, modelo, certificación "
@@ -301,7 +317,8 @@ def mostrar_guia_epp(
             "Verificación documental preliminar"
             if (
                 seleccionada >= requerida
-                and all(verificados.values())
+                and all(v is True or v == "Verificado" or v == "No corresponde en esta tarea"
+                        for v in verificados.values())
                 and observaciones.strip()
             )
             else "Incompleta"
@@ -310,5 +327,4 @@ def mostrar_guia_epp(
 
 
 def mostrar():
-
     mostrar_guia_epp()
