@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 
@@ -10,15 +9,22 @@ from modules.reportes import generar_pdf
 
 
 def fecha_actual():
-
     return datetime.now(timezone.utc).strftime(
         "%Y-%m-%d %H:%M UTC"
     )
 
 
 def normalizar(valor):
-
     return " ".join(str(valor or "").split()).casefold()
+
+
+def estado_documental(detalle, validar=None):
+    estado = detalle.get("Estado", "Borrador")
+    if estado == "Borrador académico":
+        return "Borrador"
+    if estado in {"Pendiente de revisión", "Revisado", "Aprobado"} and validar and validar(detalle):
+        return "Borrador"
+    return estado
 
 
 def administrar_documentos(
@@ -28,20 +34,28 @@ def administrar_documentos(
     campos,
     referencia,
     inicial=None,
-    tipo=None
+    tipo=None,
+    validar=None,
+    opciones_campos=None,
+    ayudas=None,
+    registros=None
 ):
-
     mostrar_aviso(tabla)
 
     prefijo = f"{tabla}_{tipo}_{proyecto['id']}"
 
-    registros = consultar(
-        tabla,
-        {"proyecto_id": proyecto["id"]}
-    )
+    if registros is None:
+        registros = consultar(tabla, {"proyecto_id": proyecto["id"]})
+    if validar is None:
+        def validar(detalle):
+            return [
+                campo for lista in campos.values() for campo in lista
+                if not str(detalle.get(campo) or "").strip()
+            ]
+    opciones_campos = opciones_campos or {}
+    ayudas = ayudas or {}
 
     if tipo:
-
         registros = [
             r for r in registros
             if (r.get("detalle") or {}).get("Tipo") == tipo
@@ -57,23 +71,19 @@ def administrar_documentos(
     registro = {}
 
     if accion == "Consultar y editar":
-
         if not registros:
-
             st.info("No hay documentos registrados.")
             return
 
         c1, c2 = st.columns(2)
 
         with c1:
-
             buscar = st.text_input(
                 "Buscar documento",
                 key=f"buscar_{prefijo}"
             )
 
         with c2:
-
             filtro = st.selectbox(
                 "Filtrar por estado",
                 [
@@ -90,13 +100,9 @@ def administrar_documentos(
         filtrados = []
 
         for r in registros:
-
             d = r.get("detalle") or {}
 
-            estado = d.get("Estado", "Borrador")
-
-            if estado == "Borrador académico":
-                estado = "Borrador"
+            estado = estado_documental(d, validar)
 
             texto = " ".join([
                 str(d.get("Identificación", "")),
@@ -113,20 +119,18 @@ def administrar_documentos(
             filtrados.append(r)
 
         if not filtrados:
-
             st.info("No hay documentos que coincidan.")
             return
 
         resumen = []
 
         for r in filtrados:
-
             d = r.get("detalle") or {}
 
             resumen.append({
                 "Identificación": d.get("Identificación"),
                 "Equipo": d.get("Equipo"),
-                "Estado": d.get("Estado", "Borrador"),
+                "Estado": estado_documental(d, validar),
                 "Última modificación": d.get(
                     "Última modificación", ""
                 )
@@ -150,9 +154,7 @@ def administrar_documentos(
                     "Identificación", "Documento"
                 ))
                 + " | "
-                + str(opciones[x].get("detalle", {}).get(
-                    "Estado", "Borrador"
-                ))
+                + estado_documental(opciones[x].get("detalle") or {}, validar)
             ),
             key=f"seleccion_{prefijo}"
         )
@@ -161,10 +163,9 @@ def administrar_documentos(
 
     anterior = registro.get("detalle") or inicial or {}
 
-    estado = anterior.get("Estado", "Borrador")
-
-    if estado == "Borrador académico":
-        estado = "Borrador"
+    estado = estado_documental(anterior, validar)
+    estado_anterior = anterior.get("Estado", "Borrador")
+    etiqueta_estado = "Aprobado documentalmente · académico" if estado == "Aprobado" else estado
 
     historial = anterior.get("Historial") or []
 
@@ -179,53 +180,52 @@ def administrar_documentos(
     )
 
     if registro:
-
         st.subheader("Estado del documento")
 
         if estado == "Aprobado":
-
-            st.success("Aprobado documentalmente")
+            st.success(etiqueta_estado)
 
         elif estado == "Rechazado":
-
             st.error("Rechazado: requiere correcciones")
 
         elif estado == "Pendiente de revisión":
-
             st.warning("Pendiente de revisión")
 
         elif estado == "Revisado":
-
             st.info("Revisado: pendiente de aprobación")
 
         else:
-
             st.info("Borrador")
+            if estado_anterior in {"Pendiente de revisión", "Revisado", "Aprobado"}:
+                st.warning("La revisión anterior corresponde a una versión incompleta según los controles actuales. Corrige y vuelve a enviar el documento.")
 
     if not editable:
-
         st.caption(
             "El documento está protegido contra edición. "
             "Debe regresar a borrador para modificarlo."
         )
 
     with st.form("form_" + clave):
-
         detalle = {}
 
         for seccion, lista_campos in campos.items():
-
             with st.expander(seccion, expanded=True):
-
                 for campo in lista_campos:
-
-                    detalle[campo] = st.text_area(
-                        campo,
-                        value=str(anterior.get(campo) or ""),
-                        height=85,
-                        disabled=not editable,
-                        key=f"{clave}_{seccion}_{campo}"
-                    )
+                    valor = str(anterior.get(campo) or "")
+                    ajustes = {
+                        "disabled": not editable,
+                        "key": f"{clave}_{seccion}_{campo}",
+                        "help": ayudas.get(campo)
+                    }
+                    if campo in opciones_campos:
+                        alternativas = opciones_campos[campo]
+                        detalle[campo] = st.selectbox(
+                            campo, alternativas,
+                            index=alternativas.index(valor) if valor in alternativas else None,
+                            **ajustes
+                        )
+                    else:
+                        detalle[campo] = st.text_area(campo, value=valor, height=85, **ajustes)
 
         guardar = st.form_submit_button(
             "Guardar documento",
@@ -235,13 +235,11 @@ def administrar_documentos(
         )
 
     if guardar:
-
         identificacion = detalle.get(
             "Identificación", ""
         ).strip()
 
         if not identificacion:
-
             st.error("Completa la identificación.")
             return
 
@@ -256,12 +254,12 @@ def administrar_documentos(
         )
 
         if duplicado:
-
             st.warning(
                 "Ya existe un documento con esta identificación."
             )
             return
 
+        detalle = {**anterior, **detalle}
         detalle["Identificación"] = identificacion
 
         if tipo:
@@ -301,9 +299,7 @@ def administrar_documentos(
         }
 
         try:
-
             if registro:
-
                 respuesta = actualizar(
                     tabla,
                     registro["id"],
@@ -311,22 +307,18 @@ def administrar_documentos(
                 )
 
             else:
-
                 respuesta = insertar(tabla, datos)
 
             if respuesta:
-
                 notificar(
                     tabla,
                     "Documento guardado exitosamente."
                 )
 
             else:
-
                 st.error("No se confirmó el guardado.")
 
         except Exception as error:
-
             st.error(f"No se pudo guardar: {error}")
 
     if not registro:
@@ -348,7 +340,7 @@ def administrar_documentos(
             ("Devolver a borrador", "Borrador")
         ],
         "Revisado": [
-            ("Aprobar documento", "Aprobado"),
+            ("Registrar aprobación académica", "Aprobado"),
             ("Rechazar documento", "Rechazado"),
             ("Devolver a borrador", "Borrador")
         ],
@@ -365,9 +357,7 @@ def administrar_documentos(
     )
 
     if opciones_estado:
-
         with st.form(f"revision_{clave}"):
-
             movimiento = st.selectbox(
                 "Acción documental",
                 list(opciones_estado)
@@ -396,15 +386,9 @@ def administrar_documentos(
             )
 
         if aplicar:
-
             nuevo_estado = opciones_estado[movimiento]
 
-            faltantes = [
-                campo
-                for lista in campos.values()
-                for campo in lista
-                if not str(guardado.get(campo) or "").strip()
-            ]
+            faltantes = validar(guardado)
 
             if not all([
                 responsable.strip(),
@@ -412,7 +396,6 @@ def administrar_documentos(
                 observaciones.strip(),
                 confirmar
             ]):
-
                 st.error(
                     "Completa los datos del responsable, "
                     "las observaciones y la confirmación."
@@ -423,17 +406,13 @@ def administrar_documentos(
                 "Revisado",
                 "Aprobado"
             ] and faltantes:
-
                 st.error(
-                    "Completa los campos del documento antes "
-                    "de continuar. Si alguno no aplica, "
-                    "documenta el motivo."
+                    "Resuelve los datos pendientes o inconsistentes del documento antes de continuar."
                 )
 
                 st.write(faltantes)
 
             else:
-
                 nuevo = dict(guardado)
 
                 nuevo["Estado"] = nuevo_estado
@@ -453,7 +432,6 @@ def administrar_documentos(
                 }]
 
                 try:
-
                     respuesta = actualizar(
                         tabla,
                         registro["id"],
@@ -464,20 +442,17 @@ def administrar_documentos(
                     )
 
                     if respuesta:
-
                         notificar(
                             tabla,
-                            f"Estado actualizado: {nuevo_estado}."
+                            f"Estado documental actualizado: {nuevo_estado}."
                         )
 
                     else:
-
                         st.error(
                             "No se confirmó la actualización."
                         )
 
                 except Exception as error:
-
                     st.error(str(error))
 
     st.divider()
@@ -485,7 +460,6 @@ def administrar_documentos(
     st.subheader("Historial documental")
 
     if historial:
-
         st.dataframe(
             pd.DataFrame(historial),
             hide_index=True,
@@ -493,13 +467,11 @@ def administrar_documentos(
         )
 
     else:
-
         st.info("No hay movimientos registrados.")
 
     secciones = []
 
     for seccion, lista_campos in campos.items():
-
         secciones.append((
             seccion,
             {
@@ -511,7 +483,7 @@ def administrar_documentos(
     secciones.append((
         "Control documental",
         {
-            "Estado": estado,
+            "Estado": etiqueta_estado,
             "Creado por": guardado.get("Creado por", ""),
             "Fecha de creación": guardado.get(
                 "Fecha de creación", ""
@@ -526,15 +498,19 @@ def administrar_documentos(
         }
     ))
 
-    for i, movimiento in enumerate(historial, 1):
+    if estado == "Borrador":
+        faltantes = validar(guardado)
+        if faltantes:
+            secciones.append(("Pendientes para revisión", {"Comprobaciones": faltantes}))
 
+    for i, movimiento in enumerate(historial, 1):
         secciones.append((
             f"Registro de revisión {i}",
             movimiento
         ))
 
     pdf = generar_pdf(
-        titulo + " - " + estado.upper(),
+        titulo + " - " + etiqueta_estado.upper(),
         proyecto,
         secciones,
         referencia
@@ -546,13 +522,12 @@ def administrar_documentos(
         f"{tabla}_{registro['id']}.pdf",
         "application/pdf",
         key=f"pdf_{clave}",
+        on_click="ignore",
         use_container_width=True
     )
 
     if estado in ["Borrador", "Rechazado"]:
-
         with st.expander("Eliminar documento"):
-
             confirmar_eliminar = st.checkbox(
                 "Confirmo la eliminación permanente",
                 key=f"confirmar_{clave}"
@@ -563,20 +538,15 @@ def administrar_documentos(
                 disabled=not confirmar_eliminar,
                 key=f"eliminar_{clave}"
             ):
-
                 try:
-
                     if eliminar(tabla, registro["id"]):
-
                         notificar(
                             tabla,
                             "Documento eliminado correctamente."
                         )
 
                     else:
-
                         st.error("No se confirmó la eliminación.")
 
                 except Exception as error:
-
                     st.error(str(error))
