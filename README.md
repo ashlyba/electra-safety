@@ -1,4 +1,3 @@
-
 # Electra Safe 360
 
 ## ElectraSafety Consultores
@@ -77,6 +76,11 @@ autorizaciones reales de trabajo.
 
 ## Versión
 
-1.0 - Candidata a validación académica.
+1.1. Revisión académica del código y de las tablas proporcionadas en el curso.
+La conexión, las políticas de acceso y la persistencia deben comprobarse en el
+proyecto Supabase utilizado para la demostración.
 
-Pendiente de revisión normativa y pruebas integrales.
+El archivo `.streamlit/secrets.toml` debe definir `[supabase]` con
+`url` y `key`. Utilice la clave pública del proyecto (publishable o anon)
+y autentique a cada usuario. Mantenga las políticas de acceso en el servidor.
+La aplicación espera las tablas y los códigos automáticos del proyecto Supabase.
