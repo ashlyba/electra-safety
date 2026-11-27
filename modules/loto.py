@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 
@@ -78,18 +77,54 @@ CATALOGO = [
 ]
 
 
+DOCUMENTACION_FABRICANTE = (
+    "Catálogo técnico Brady de bloqueo y etiquetado "
+    "(https://www.onlineelec.com/brands/brady/lockout_tagout/pdf/LOTO_Catalog.pdf). "
+    "Consultar la ficha e instrucciones vigentes del modelo instalado."
+)
+
+APLICACIONES = {
+    "candado": ("Cerrar el arco en un punto de bloqueo compatible.", "Orificio del desconectador, adaptador, pinza o caja según diseño.", "Brady, familias de candados de seguridad"),
+    "pinza": ("Cerrar la mordaza sobre la orejeta del punto de bloqueo.", "Orificios de la pinza para los candados personales.", "Brady 65375"),
+    "interruptor": ("Encajar el adaptador compatible sobre la palanca en posición de apertura.", "Orificio del adaptador; el candado impide liberar el mecanismo.", "Brady 65396 / 65397"),
+    "enchufe": ("Alojar la clavija desconectada dentro de la carcasa.", "Punto de cierre de la carcasa; la etiqueta identifica el bloqueo.", "Brady PLO23"),
+    "valvula": ("Cubrir el volante con un bloqueador compatible en la posición definida por el procedimiento.", "Orejeta de cierre de la cubierta; controlar la presión por separado.", "Brady 64057"),
+    "caja": ("Depositar las llaves de los bloqueos de aislamiento dentro de la caja grupal.", "Cada participante usa su candado personal en un punto individual de la caja.", "Brady 65699"),
+    "seccionador": ("Identificar el mecanismo bloqueable del seccionador en posición abierta según su manual.", "Orejeta prevista por el fabricante; verificar la compatibilidad con el arco del candado.", "Manual de instalación y operación del seccionador específico")
+}
+
+CATALOGO.append({
+    "ID": "seccionador", "Nombre": "Bloqueo de seccionador",
+    "Función": "Impedir que el medio de desconexión se cierre.",
+    "Aplicación": "Seccionador con mecanismo bloqueable.",
+    "Compatibilidad": "Posición y dimensiones de la orejeta y del candado.",
+    "Selección": "Documentar el fabricante, modelo y referencia del seccionador.",
+    "Limitaciones": "Confirmar aislamiento y la posición abierta mediante el procedimiento."
+})
+for dispositivo in CATALOGO:
+    colocacion, fijacion, referencia = APLICACIONES[dispositivo["ID"]]
+    dispositivo.update({
+        "Colocación": colocacion, "Fijación": fijacion,
+        "Candado y etiqueta": "Identificar a quien coloca el dispositivo y usar la etiqueta conforme al procedimiento.",
+        "Referencia del fabricante": referencia
+    })
+
+
 POLITICA = {
     "1. Información general": [
         "Identificación",
         "Objetivo",
         "Alcance",
-        "Equipos incluidos"
+        "Equipos incluidos",
+        "Documentación, diagramas y revisión"
     ],
     "2. Responsabilidades": [
         "Responsable del programa",
         "Personal autorizado",
         "Personal afectado",
-        "Capacitación y auditoría"
+        "Capacitación y auditoría",
+        "Responsable del aislamiento, verificación y cierre",
+        "Modalidad simple o compleja y persona encargada"
     ],
     "3. Planificación y control": [
         "Identificación de fuentes de energía",
@@ -97,21 +132,47 @@ POLITICA = {
         "Parada del equipo",
         "Puntos y medios de aislamiento",
         "Dispositivos de bloqueo y etiquetado",
+        "Aplicación de dispositivos y medidas adicionales",
+        "Dispositivos específicos del proyecto y sus referencias",
         "Control de energía almacenada",
-        "Verificación de aislamiento y ausencia de tensión"
+        "Verificación de aislamiento y ausencia de tensión",
+        "Instrumento, EPP y registro de prueba",
+        "Tensiones inducidas y puesta a tierra temporal"
     ],
     "4. Situaciones especiales": [
         "Bloqueo grupal",
         "Cambio de turno",
         "Retiro excepcional de dispositivos",
-        "Contratistas"
+        "Contratistas",
+        "Registro de participantes y transferencia de protección",
+        "Liberación temporal para pruebas o posicionamiento"
     ],
     "5. Restitución del servicio": [
         "Inspección previa",
         "Retiro controlado de dispositivos",
         "Notificación y restitución",
-        "Responsable de revisión"
+        "Responsable de revisión",
+        "Actualización y disponibilidad del procedimiento"
     ]
+}
+
+
+AYUDAS_POLITICA = {
+    "Identificación de fuentes de energía": "Usa diagramas actualizados o un medio equivalente. Incluye fuentes principales, secundarias, retorno y energías no eléctricas.",
+    "Puntos y medios de aislamiento": "Identifica el medio de desconexión de cada fuente y la forma de confirmar su posición. Distingue medios de desconexión de pulsadores y selectores.",
+    "Modalidad simple o compleja y persona encargada": "Aplica 120.5(A)(4) o (5). Para LOTO complejo, registra el plan escrito y la persona encargada.",
+    "Aplicación de dispositivos y medidas adicionales": "Si el diseño impide el candado y se usa etiquetado por sí solo, fundamenta la condición e indica la medida adicional y la responsabilidad de las personas expuestas.",
+    "Dispositivos específicos del proyecto y sus referencias": "Registra otros dispositivos, modelo, compatibilidad, colocación, fijación e instrucciones del fabricante.",
+    "Control de energía almacenada": "Documenta energía eléctrica y no eléctrica, tratamiento y control de reacumulación según 120.5(B)(2) y 120.6.",
+    "Verificación de aislamiento y ausencia de tensión": "Documenta la comprobación de no rearranque y de ausencia de tensión en cada punto de trabajo según 120.5(B)(5)–(6) y 120.6(7).",
+    "Instrumento, EPP y registro de prueba": "Indica clasificación del instrumento, quién verifica, protección y prueba antes y después en fuente conocida, o fundamenta la excepción aplicable.",
+    "Tensiones inducidas y puesta a tierra temporal": "Indica si corresponde aplicar 120.6(8)–(9), con el criterio documentado.",
+    "Capacitación y auditoría": "Registra auditoría del programa cada 3 años como máximo y de los procedimientos cada año como máximo por una persona calificada, según 110.3(L)(3)–(4).",
+    "Bloqueo grupal": "Describe el control de llaves, dispositivos individuales y registro de participantes.",
+    "Retiro excepcional de dispositivos": "Documenta el procedimiento del empleador, el intento de localizar a quien lo instaló y la notificación antes de que vuelva al trabajo.",
+    "Inspección previa": "Registra pruebas e inspección visual, retiro de elementos temporales y comprobación de que las personas están fuera de la exposición.",
+    "Notificación y restitución": "Identifica quién comunica el retorno y quién restituye conforme a la secuencia autorizada del procedimiento.",
+    "Liberación temporal para pruebas o posicionamiento": "Identifica la persona calificada y los pasos de 120.5(B)(13)–(14) cuando corresponda."
 }
 
 
@@ -122,6 +183,12 @@ def mostrar_catalogo():
     st.caption(
         "Ilustraciones esquemáticas de referencia."
     )
+
+    st.markdown(
+        "[Catálogo técnico Brady de bloqueo y etiquetado]"
+        "(https://www.onlineelec.com/brands/brady/lockout_tagout/pdf/LOTO_Catalog.pdf)"
+    )
+    st.caption("Consulta la ficha e instrucciones vigentes del modelo instalado.")
 
     buscar = st.text_input(
         "Buscar dispositivo",
@@ -173,11 +240,12 @@ def mostrar_catalogo():
 
         st.download_button(
             "Descargar catálogo ilustrado PDF",
-            generar_catalogo_pdf(elegidos),
+            generar_catalogo_pdf(elegidos, DOCUMENTACION_FABRICANTE),
             "catalogo_LOTO.pdf",
             "application/pdf",
             type="primary",
-            use_container_width=True
+            use_container_width=True,
+            on_click="ignore",
         )
 
 
@@ -187,7 +255,7 @@ def mostrar_etiquetas(proyecto):
 
     st.subheader("Generador de etiquetas LOTO")
 
-    with st.form("form_etiqueta_loto"):
+    with st.form(f"form_etiqueta_loto_{proyecto['id']}"):
 
         c1, c2 = st.columns(2)
 
@@ -322,7 +390,8 @@ def mostrar_etiquetas(proyecto):
                 ),
                 "etiqueta_LOTO.pdf",
                 "application/pdf",
-                use_container_width=True
+                use_container_width=True,
+                on_click="ignore",
             )
 
             if st.button(
@@ -441,7 +510,8 @@ def mostrar_etiquetas(proyecto):
                 for x in seleccion
             ]),
             "lote_etiquetas_LOTO.pdf",
-            "application/pdf"
+            "application/pdf",
+            on_click="ignore",
         )
 
     with st.expander("Eliminar etiqueta"):
@@ -499,14 +569,17 @@ def mostrar():
         mostrar_catalogo()
 
     with tab2:
-
+        st.caption(
+            "Documenta la secuencia del artículo 120 para el equipo y proyecto. "
+            "El Anexo G ilustra un programa. Justifica las situaciones que no correspondan."
+        )
         administrar_documentos(
             "loto",
             proyecto,
             "Política y procedimiento LOTO",
             POLITICA,
-            "NFPA 70E 2027, artículo 120.",
-            tipo="Política LOTO"
+            "NFPA 70E 2027: 120.2 a 120.6 y 110.3(L)(3)–(4). Anexo G informativo.",
+            tipo="Política LOTO", ayudas=AYUDAS_POLITICA
         )
 
     with tab3:
