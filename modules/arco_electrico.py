@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 
@@ -22,6 +21,8 @@ from modules.comunes import (
 from modules.tablas_nfpa import (
     TABLA_CA,
     TAREAS_ARCO,
+    REVISION_CRITERIOS,
+    resultado_arco_vigente,
     probabilidad_arco,
     calcular_arco,
     limites_choque,
@@ -34,7 +35,6 @@ from modules.reportes import generar_pdf
 
 
 def distancia_texto(valor):
-
     if valor is None:
         return "No especificado"
 
@@ -45,20 +45,17 @@ def distancia_texto(valor):
 
 
 def fecha_actual():
-
     return datetime.now(
         timezone.utc
     ).strftime("%Y-%m-%d %H:%M UTC")
 
 
 def presentar_resultado(detalle):
-
     st.subheader(
         "Protección contra arco eléctrico"
     )
 
-    if detalle.get("Método aplicable") == "Sí":
-
+    if resultado_arco_vigente(detalle):
         c1, c2, c3 = st.columns(3)
 
         c1.metric(
@@ -82,12 +79,11 @@ def presentar_resultado(detalle):
         )
 
     else:
-
         st.warning(
             detalle.get(
                 "Motivo",
                 "Información insuficiente."
-            )
+            ) or "Reevalúe este punto con los criterios actuales antes de reutilizar sus resultados."
         )
 
     st.subheader(
@@ -137,7 +133,6 @@ def formulario_evaluacion(
     proyecto,
     registro=None
 ):
-
     anterior = (
         registro.get("detalle") or {}
         if registro
@@ -186,7 +181,6 @@ def formulario_evaluacion(
     )
 
     with st.form(f"{clave}_formulario"):
-
         st.subheader(
             "Identificación del punto"
         )
@@ -229,8 +223,10 @@ def formulario_evaluacion(
                 anterior.get(
                     "Condición del equipo",
                     "No determinada"
-                )
-            )
+                ) if anterior.get("Condición del equipo") in {"Normal", "Anormal"}
+                else "No determinada"
+            ),
+            help="Para condición normal, verifica instalación, mantenimiento, capacidad de falla, uso conforme a fabricante, puertas y cubiertas aseguradas y ausencia de falla inminente."
         )
 
         fila_tarea = st.selectbox(
@@ -242,7 +238,11 @@ def formulario_evaluacion(
                 if i is None
                 else TAREAS_ARCO[i][0]
             ),
-            index=0
+            index=next(
+                (i + 1 for i, fila in enumerate(TAREAS_ARCO)
+                 if fila[0] == anterior.get("Fila normativa de tarea")),
+                0
+            )
         )
 
         evidencia_tarea = st.text_area(
@@ -279,7 +279,7 @@ def formulario_evaluacion(
         )
 
         tiempo = c1.number_input(
-            "Tiempo de despeje o duración (s)",
+            "Tiempo de despeje (CA) o duración del arco (CC), en s",
             min_value=0.0,
             value=float(
                 anterior.get("Tiempo (s)") or 0
@@ -297,26 +297,39 @@ def formulario_evaluacion(
             )
         )
 
+        tension_tarea = st.number_input(
+            "Tensión de la tarea (V) para filas con umbral específico",
+            min_value=0.0, value=float(anterior.get("Tensión de la tarea (V)") or 0),
+            help="Completa en circuitos de control, baterías con separación especificada y desconexión exterior."
+        )
+        separacion = st.number_input(
+            "Separación entre conductores (mm), si la fila de baterías lo requiere",
+            min_value=0.0, value=float(anterior.get("Separación entre conductores (mm)") or 0)
+        )
+        tension_exposicion = st.number_input(
+            "Tensión de exposición a choque (V CA RMS o V CC)",
+            min_value=0.0, value=float(anterior.get("Tensión de exposición (V)") or 0),
+            help="Usa la tensión de exposición documentada para orientar la clase del guante."
+        )
         altitud = st.number_input(
             "Elevación del sitio (m s. n. m.)",
-            min_value=0,
-            value=int(
-                anterior.get("Altitud (m)") or 0
-            )
+            value=anterior.get("Altitud (m)"),
+            step=1,
+            help="Requerida para informar el límite restringido del punto de trabajo."
         )
 
         movil = st.radio(
             "Tipo de parte energizada expuesta",
             [
                 "Parte fija",
-                "Conductor móvil"
+                "Conductor móvil",
+                "Sin parte expuesta",
+                "Exposición sin determinar"
             ],
-            index=(
-                1 if anterior.get(
-                    "Parte expuesta"
-                ) == "Conductor móvil"
-                else 0
-            )
+            index={
+                "Parte fija": 0, "Conductor móvil": 1,
+                "Sin parte expuesta": 2, "Exposición sin determinar": 3
+            }.get(anterior.get("Parte expuesta"), 3)
         )
 
         fuente = st.text_area(
@@ -331,35 +344,72 @@ def formulario_evaluacion(
             )
         )
 
-        st.subheader(
-            "Condiciones de aplicación"
+        st.subheader("Condiciones de aplicación")
+        filas_mcc = [None, 2, 4]
+        fila_mcc = st.selectbox(
+            "Fila documentada para MCC clase 600 V",
+            filas_mcc,
+            index=filas_mcc.index(anterior.get("Fila MCC")) if anterior.get("Fila MCC") in filas_mcc else 0,
+            format_func=lambda x: {None: "Sin selección", 2: "65 kA y 0,03 s", 4: "42 kA y 0,33 s"}[x],
+            help="Completa este campo cuando ambas filas superen la comprobación numérica."
         )
+        opciones_cc = ["Sin determinar", "Al aire libre, sin exposición a electrolito",
+                       "Envolvente o posible exposición a electrolito", "Capacitores del artículo 360"]
+        condicion_cc = st.selectbox(
+            "Alcance de la evaluación de CC", opciones_cc,
+            index=opciones_cc.index(anterior.get("Condición de CC")) if anterior.get("Condición de CC") in opciones_cc else 0,
+            disabled=sistema != "CC",
+            help="La herramienta automatiza la fila de CC al aire libre y sin exposición a electrolito. Otros casos requieren revisión técnica."
+        )
+        bases_ca = {"pendiente": "Sin determinar", "fase_fase": "Tensión nominal fase a fase",
+                    "monofasico": "Sistema monofásico", "nota_e": "Rango 50–150 V, nota e"}
+        base_anterior = anterior.get("Base de tensión CA")
+        base_ca = st.selectbox(
+            "Base de tensión para límites de choque en CA", list(bases_ca),
+            index=list(bases_ca).index(base_anterior) if base_anterior in bases_ca else 0,
+            format_func=bases_ca.get, disabled=sistema != "CA"
+        )
+        fase_tierra = st.number_input(
+            "Tensión máxima fase a tierra (V) para monofásico o nota e",
+            min_value=0.0, value=float(anterior.get("Tensión fase a tierra (V)") or 0),
+            disabled=sistema != "CA"
+        )
+        st.caption("Use la tensión nominal del equipo para arco. Para choque, documente el conductor expuesto, la base de tensión y la elevación real.")
 
         requiere_epp = st.checkbox(
             "La evaluación previa determina "
-            "que se requiere EPP contra arco."
+            "que se requiere EPP contra arco.",
+            value=anterior.get("Requiere EPP contra arco") is True
         )
 
         clasificacion = st.checkbox(
             "Se verificó la clasificación "
-            "y el tipo de equipo."
+            "y el tipo de equipo.",
+            value=anterior.get("Clasificación verificada") is True
         )
 
+        normal_verificada = st.checkbox(
+            "Para condición normal, confirmé los siete criterios de 110.2(B), excepción 1",
+            value=anterior.get("Condición normal verificada") is True,
+            help="Instalación, mantenimiento, clasificación de falla, uso según fabricante, puertas, cubiertas y ausencia de indicios de falla."
+        )
         mantenimiento = st.checkbox(
             "Se verificó el estado y "
-            "mantenimiento del equipo."
+            "mantenimiento del equipo.",
+            value=anterior.get("Mantenimiento verificado") is True
         )
 
         notas = st.checkbox(
-            "Se revisaron las notas, "
-            "condiciones y excepciones "
-            "de la fila normativa."
+            "Se revisaron las notas, condiciones y excepciones de la fila normativa.",
+            value=anterior.get("Notas verificadas") is True,
+            help="La aplicación mantiene la categoría de la fila sin aplicar reducciones opcionales por dispositivos limitadores."
         )
 
         solo_tablas = st.checkbox(
             "Se utilizará únicamente el método "
             "de categorías, sin combinarlo "
-            "con energía incidente."
+            "con energía incidente.",
+            value=anterior.get("Método exclusivo de tablas") is True
         )
 
         evidencia = st.text_area(
@@ -384,7 +434,6 @@ def formulario_evaluacion(
         )
 
     if evaluar:
-
         st.session_state.pop(
             f"{clave}_resultado", None
         )
@@ -395,7 +444,6 @@ def formulario_evaluacion(
             tarea.strip(),
             fuente.strip()
         ]):
-
             st.error(
                 "Complete los campos obligatorios."
             )
@@ -408,13 +456,12 @@ def formulario_evaluacion(
             voltaje,
             corriente,
             tiempo,
-            distancia
+            distancia, fila_mcc=fila_mcc
         )
 
         probabilidad = probabilidad_arco(
-            fila_tarea,
-            estado
-        )
+            fila_tarea, estado, sistema, tension_tarea, separacion
+        ) if estado != "Normal" or normal_verificada else None
 
         condiciones = all([
             probabilidad is True,
@@ -426,11 +473,11 @@ def formulario_evaluacion(
             notas,
             solo_tablas,
             bool(evidencia.strip()),
-            estado != "No determinada"
+            estado != "No determinada",
+            sistema != "CC" or condicion_cc == "Al aire libre, sin exposición a electrolito"
         ])
 
         if not condiciones:
-
             arco = {
                 "aplicable": False,
                 "motivo": (
@@ -443,8 +490,14 @@ def formulario_evaluacion(
         choque = limites_choque(
             sistema,
             voltaje,
-            movil == "Conductor móvil"
-        )
+            movil == "Conductor móvil",
+            base_ca=base_ca if sistema == "CA" else None,
+            fase_tierra=fase_tierra,
+            altitud=altitud
+        ) if (
+            altitud is not None and movil in {"Parte fija", "Conductor móvil"}
+            and (sistema != "CA" or base_ca != "pendiente")
+        ) else None
 
         limitada = (
             distancia_texto(
@@ -462,22 +515,11 @@ def formulario_evaluacion(
             else "No determinada"
         )
 
-        if (
-            altitud > 900
-            and choque
-            and isinstance(
-                choque.get("restringida"),
-                (int, float)
-            )
-        ):
-
-            restringida = (
-                "Requiere revisión por altitud"
-            )
-
-        guante = clase_guante(
-            sistema,
-            voltaje
+        if movil == "Sin parte expuesta":
+            limitada = restringida = "No aplica: sin partes energizadas expuestas"
+        guante = (
+            clase_guante(sistema, tension_exposicion)
+            if movil in {"Parte fija", "Conductor móvil"} else None
         )
 
         categoria = arco.get(
@@ -485,7 +527,16 @@ def formulario_evaluacion(
         )
 
         detalle = {
-
+            "Versión de criterios de arco": REVISION_CRITERIOS,
+            "Índice de fila de tarea": fila_tarea,
+            "Condición normal verificada": normal_verificada,
+            "Tensión de la tarea (V)": tension_tarea,
+            "Separación entre conductores (mm)": separacion,
+            "Tensión de exposición (V)": tension_exposicion,
+            "Fila MCC": fila_mcc,
+            "Condición de CC": condicion_cc if sistema == "CC" else None,
+            "Base de tensión CA": base_ca if sistema == "CA" else None,
+            "Tensión fase a tierra (V)": fase_tierra if sistema == "CA" else None,
             "Código del punto": anterior.get(
                 "Código del punto"
             ) or (
@@ -577,6 +628,9 @@ def formulario_evaluacion(
             ),
 
             "Motivo": arco.get("motivo", ""),
+            "Corriente de falla máxima tabulada (kA)": arco.get("corriente_maxima"),
+            "Tiempo máximo tabulado (s)": arco.get("tiempo_maximo"),
+            "Distancia mínima tabulada (mm)": arco.get("distancia_minima"),
 
             "Aproximación limitada": limitada,
 
@@ -613,7 +667,6 @@ def formulario_evaluacion(
     )
 
     if detalle:
-
         presentar_resultado(detalle)
 
         st.caption(
@@ -631,11 +684,8 @@ def formulario_evaluacion(
             type="primary",
             key=f"{clave}_guardar"
         ):
-
             try:
-
                 if registro:
-
                     guardado = actualizar(
                         "arco_electrico",
                         registro["id"],
@@ -643,7 +693,6 @@ def formulario_evaluacion(
                     )
 
                 else:
-
                     guardado = insertar(
                         "arco_electrico",
                         {
@@ -653,7 +702,6 @@ def formulario_evaluacion(
                     )
 
                 if guardado:
-
                     st.session_state.pop(
                         f"{clave}_resultado",
                         None
@@ -665,21 +713,35 @@ def formulario_evaluacion(
                     )
 
             except Exception as error:
-
                 st.error(
                     f"No se pudo guardar: {error}"
                 )
 
 
-def consultar_evaluaciones(proyecto):
+def detalle_consultable(detalle):
+    if detalle.get("Versión de criterios de arco") != REVISION_CRITERIOS:
+        detalle = {
+            **detalle,
+            "Aproximación limitada": "Pendiente de reevaluación",
+            "Aproximación restringida": "Pendiente de reevaluación",
+            "Clase de guante": "Pendiente de reevaluación"
+        }
+    if detalle.get("Método aplicable") == "Sí" and not resultado_arco_vigente(detalle):
+        return {
+            **detalle, "Método aplicable": "Pendiente de reevaluación", "Categoría": None,
+            "Frontera de arco": None, "Protección mínima": None,
+            "Motivo": "Reevalúe el punto con los criterios actuales."
+        }
+    return detalle
 
+
+def consultar_evaluaciones(proyecto):
     registros = consultar(
         "arco_electrico",
         {"proyecto_id": proyecto["id"]}
     )
 
     if not registros:
-
         st.info(
             "No hay evaluaciones registradas."
         )
@@ -687,7 +749,7 @@ def consultar_evaluaciones(proyecto):
         return
 
     detalles = [
-        r.get("detalle") or {}
+        detalle_consultable(r.get("detalle") or {})
         for r in registros
     ]
 
@@ -735,29 +797,18 @@ def consultar_evaluaciones(proyecto):
 
     registro = opciones[seleccionado]
 
-    detalle = registro.get("detalle") or {}
+    detalle = detalle_consultable(registro.get("detalle") or {})
 
     c1, c2 = st.columns(2)
 
-    c1.write(
-        "**Código:**",
-        detalle.get(
-            "Código del punto",
-            str(seleccionado)[:8]
-        )
-    )
-
-    c2.write(
-        "**Revisión:**",
-        detalle.get("Revisión", 1)
-    )
+    c1.markdown(f"**Código:** {detalle.get('Código del punto') or str(seleccionado)[:8]}")
+    c2.markdown(f"**Revisión:** {detalle.get('Revisión') or 1}")
 
     presentar_resultado(detalle)
 
     with st.expander(
         "Datos técnicos completos"
     ):
-
         st.dataframe(
             pd.DataFrame([
                 {
@@ -773,7 +824,6 @@ def consultar_evaluaciones(proyecto):
     with st.expander(
         "Editar evaluación"
     ):
-
         formulario_evaluacion(
             proyecto,
             registro
@@ -801,13 +851,13 @@ def consultar_evaluaciones(proyecto):
         ),
         mime="application/pdf",
         key=f"arco_pdf_{seleccionado}",
-        type="primary"
+        type="primary",
+        on_click="ignore",
     )
 
     with st.expander(
         "Eliminar evaluación"
     ):
-
         st.warning(
             "La eliminación puede afectar "
             "la trazabilidad de documentos "
@@ -824,26 +874,21 @@ def consultar_evaluaciones(proyecto):
             disabled=not confirmar,
             key=f"arco_eliminar_{seleccionado}"
         ):
-
             try:
-
                 if eliminar(
                     "arco_electrico",
                     seleccionado
                 ):
-
                     notificar(
                         "arco",
                         "Evaluación eliminada."
                     )
 
             except Exception as error:
-
                 st.error(str(error))
 
 
 def seleccionar_epp(proyecto):
-
     registros = consultar(
         "arco_electrico",
         {"proyecto_id": proyecto["id"]}
@@ -852,28 +897,23 @@ def seleccionar_epp(proyecto):
     validos = {}
 
     for registro in registros:
-
         detalle = registro.get("detalle") or {}
 
         try:
-
             categoria = int(
                 detalle.get("Categoría")
             )
 
         except (TypeError, ValueError):
-
             continue
 
         if (
-            detalle.get("Método aplicable") == "Sí"
+            resultado_arco_vigente(detalle)
             and categoria in PROTECCION_ARCO
         ):
-
             validos[registro["id"]] = registro
 
     if not validos:
-
         st.info(
             "No existen evaluaciones guardadas "
             "con una categoría asignada."
@@ -882,7 +922,6 @@ def seleccionar_epp(proyecto):
         with st.expander(
             "Consultar guía general"
         ):
-
             mostrar_guia_epp(
                 clave=f"guia_{proyecto['id']}"
             )
@@ -927,7 +966,6 @@ def seleccionar_epp(proyecto):
         "Guardar selección de EPP",
         key=f"guardar_epp_{seleccionado}"
     ):
-
         actualizado = dict(
             detalle,
             **{"Selección EPP": seleccion}
@@ -947,7 +985,6 @@ def seleccionar_epp(proyecto):
 
 
 def mostrar():
-
     st.title(
         "04. Arco eléctrico, EPP y fronteras"
     )
@@ -968,13 +1005,10 @@ def mostrar():
     ])
 
     with tab1:
-
         formulario_evaluacion(proyecto)
 
     with tab2:
-
         consultar_evaluaciones(proyecto)
 
     with tab3:
-
         seleccionar_epp(proyecto)
