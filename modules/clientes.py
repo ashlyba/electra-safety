@@ -1,17 +1,16 @@
-
 import streamlit as st
+
+from modules.reportes import generar_pdf
 import pandas as pd
 
 from database import consultar, insertar, actualizar, eliminar
 
 
 def formulario_cliente(cliente=None):
-
     cliente = cliente or {}
     identificador = cliente.get("id", "nuevo")
 
     with st.form(f"formulario_cliente_{identificador}"):
-
         st.subheader("Información de la empresa")
 
         c1, c2 = st.columns(2)
@@ -104,11 +103,9 @@ def formulario_cliente(cliente=None):
         }
 
         try:
-
             existentes = consultar("clientes")
 
             for existente in existentes:
-
                 if existente["id"] == cliente.get("id"):
                     continue
 
@@ -126,17 +123,14 @@ def formulario_cliente(cliente=None):
                 )
 
                 if mismo_nombre or misma_identificacion:
-
                     st.warning(
                         "Este cliente ya se encuentra registrado. "
                         "Puedes consultar o editar su información "
                         "desde la lista de clientes."
                     )
-
                     return
 
             if cliente.get("id"):
-
                 resultado = actualizar(
                     "clientes",
                     cliente["id"],
@@ -148,7 +142,6 @@ def formulario_cliente(cliente=None):
                 )
 
             else:
-
                 resultado = insertar("clientes", datos)
 
                 mensaje = (
@@ -165,15 +158,12 @@ def formulario_cliente(cliente=None):
             st.rerun()
 
         except Exception as error:
-
             if "23505" in str(error):
-
                 st.warning(
                     "Este cliente ya se encuentra registrado."
                 )
 
             else:
-
                 st.error(
                     "No fue posible guardar el cliente. "
                     "Revisa la conexión y los datos."
@@ -181,7 +171,6 @@ def formulario_cliente(cliente=None):
 
 
 def mostrar():
-
     st.title("01. Administración de clientes")
 
     st.write(
@@ -190,7 +179,6 @@ def mostrar():
     )
 
     if st.session_state.pop("cliente_guardado", False):
-
         st.session_state["accion_clientes"] = (
             "Consultar clientes"
         )
@@ -200,7 +188,6 @@ def mostrar():
         )
 
     if "aviso_cliente" in st.session_state:
-
         mensaje = st.session_state.pop("aviso_cliente")
 
         st.success(mensaje)
@@ -224,18 +211,16 @@ def mostrar():
     st.divider()
 
     if opcion == "Registrar cliente":
-
         formulario_cliente()
         return
 
     if not clientes:
-
         st.info("Todavía no hay clientes registrados.")
         return
 
     busqueda = st.text_input(
         "Buscar cliente",
-        placeholder="Empresa, identificación o contacto"
+        placeholder="Empresa, identificación, correo o contacto"
     )
 
     filtrados = [
@@ -243,12 +228,12 @@ def mostrar():
         if busqueda.strip().casefold() in " ".join([
             str(c.get("nombre_empresa") or ""),
             str(c.get("identificacion") or ""),
-            str(c.get("contacto") or "")
+            str(c.get("contacto") or ""),
+            str(c.get("correo") or "")
         ]).casefold()
     ]
 
     if not filtrados:
-
         st.warning("No se encontraron clientes.")
         return
 
@@ -276,7 +261,22 @@ def mostrar():
         .to_csv(index=False)
         .encode("utf-8-sig"),
         file_name="clientes_electrasafety.csv",
-        mime="text/csv"
+        mime="text/csv",
+        on_click="ignore",
+    )
+
+    informe = [
+        (str(cliente.get("nombre_empresa") or "Cliente"), {
+            **{etiqueta: cliente.get(campo) for campo, etiqueta in columnas.items()},
+            "Dirección": cliente.get("direccion"),
+            "Observaciones": cliente.get("observaciones")
+        })
+        for cliente in filtrados
+    ]
+    st.download_button(
+        "Descargar listado de clientes en PDF",
+        generar_pdf("Listado de clientes", None, informe),
+        "clientes_electrasafety.pdf", "application/pdf", on_click="ignore"
     )
 
     st.divider()
@@ -307,7 +307,6 @@ def mostrar():
     )
 
     if accion == "Ver información":
-
         st.subheader(cliente["nombre_empresa"])
 
         campos = {
@@ -322,7 +321,6 @@ def mostrar():
         }
 
         for campo, etiqueta in campos.items():
-
             st.write(
                 f"**{etiqueta}:** "
                 f"{cliente.get(campo) or 'No registrado'}"
@@ -331,7 +329,6 @@ def mostrar():
         st.subheader("Proyectos asociados")
 
         if proyectos:
-
             st.dataframe(
                 pd.DataFrame(proyectos)[
                     ["codigo", "nombre", "estado"]
@@ -345,17 +342,13 @@ def mostrar():
             )
 
         else:
-
             st.info("Este cliente no tiene proyectos.")
 
     elif accion == "Editar":
-
         formulario_cliente(cliente)
 
     elif accion == "Eliminar":
-
         if proyectos:
-
             st.warning(
                 "Este cliente tiene proyectos asociados "
                 "y no puede eliminarse."
@@ -369,7 +362,6 @@ def mostrar():
             )
 
         else:
-
             st.warning(
                 "La eliminación del cliente es permanente."
             )
@@ -383,9 +375,7 @@ def mostrar():
                 "Eliminar cliente",
                 disabled=not confirmar
             ):
-
                 try:
-
                     resultado = eliminar(
                         "clientes",
                         seleccionado
@@ -407,5 +397,4 @@ def mostrar():
                     st.rerun()
 
                 except Exception:
-
                     st.error("No se pudo eliminar el cliente.")
