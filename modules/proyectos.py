@@ -1,9 +1,10 @@
-
 import streamlit as st
+
+from modules.reportes import generar_pdf
 import pandas as pd
 
 from datetime import date
-from database import consultar, insertar, actualizar, eliminar
+from database import consultar, insertar, actualizar, eliminar, contar
 
 
 ESTADOS = [
@@ -15,7 +16,6 @@ ESTADOS = [
 
 
 def proyecto_duplicado(cliente_id, nombre, excluir=None):
-
     existentes = consultar(
         "proyectos",
         {"cliente_id": cliente_id}
@@ -30,7 +30,6 @@ def proyecto_duplicado(cliente_id, nombre, excluir=None):
 
 
 def notificar(mensaje):
-
     st.session_state.aviso_proyecto = mensaje
     st.session_state.proyecto_guardado = True
 
@@ -38,7 +37,6 @@ def notificar(mensaje):
 
 
 def formulario_proyecto(clientes, proyecto=None):
-
     proyecto = proyecto or {}
 
     identificador = proyecto.get("id", "nuevo")
@@ -53,11 +51,9 @@ def formulario_proyecto(clientes, proyecto=None):
     indice = 0
 
     if proyecto.get("cliente_id") in ids:
-
         indice = ids.index(proyecto["cliente_id"])
 
     with st.form(f"formulario_proyecto_{identificador}"):
-
         cliente_id = st.selectbox(
             "Cliente *",
             ids,
@@ -78,7 +74,6 @@ def formulario_proyecto(clientes, proyecto=None):
         c1, c2 = st.columns(2)
 
         with c1:
-
             ubicacion = st.text_input(
                 "Ubicación",
                 value=proyecto.get("ubicacion") or ""
@@ -90,7 +85,6 @@ def formulario_proyecto(clientes, proyecto=None):
             )
 
         with c2:
-
             inicio = st.date_input(
                 "Fecha de inicio",
                 value=date.fromisoformat(
@@ -123,7 +117,6 @@ def formulario_proyecto(clientes, proyecto=None):
         st.caption("* Campos obligatorios.")
 
         if proyecto.get("codigo"):
-
             st.caption(
                 "Código permanente: " + proyecto["codigo"]
             )
@@ -138,17 +131,14 @@ def formulario_proyecto(clientes, proyecto=None):
             return
 
         if not nombre.strip():
-
             st.error("Indica el nombre del proyecto.")
             return
 
         if final and final < inicio:
-
             st.error(
                 "La fecha final no puede ser anterior "
                 "a la fecha de inicio."
             )
-
             return
 
         datos = {
@@ -164,22 +154,18 @@ def formulario_proyecto(clientes, proyecto=None):
         }
 
         try:
-
             if proyecto_duplicado(
                 cliente_id,
                 nombre,
                 proyecto.get("id")
             ):
-
                 st.warning(
                     "Ya existe un proyecto con este nombre "
                     "para el cliente seleccionado."
                 )
-
                 return
 
             if proyecto.get("id"):
-
                 resultado = actualizar(
                     "proyectos",
                     proyecto["id"],
@@ -191,7 +177,6 @@ def formulario_proyecto(clientes, proyecto=None):
                 )
 
             else:
-
                 resultado = insertar("proyectos", datos)
 
                 mensaje = (
@@ -199,30 +184,25 @@ def formulario_proyecto(clientes, proyecto=None):
                 )
 
             if not resultado:
-
                 st.error("No se pudo confirmar el guardado.")
                 return
 
             notificar(mensaje)
 
         except Exception as error:
-
             if "23505" in str(error):
-
                 st.warning(
                     "Ya existe un proyecto con ese nombre "
                     "para este cliente."
                 )
 
             else:
-
                 st.error(
                     "No fue posible guardar el proyecto."
                 )
 
 
 def mostrar():
-
     st.title("02. Gestión de proyectos")
 
     st.write(
@@ -231,7 +211,6 @@ def mostrar():
     )
 
     if st.session_state.pop("proyecto_guardado", False):
-
         st.session_state["accion_proyectos"] = (
             "Consultar proyectos"
         )
@@ -241,7 +220,6 @@ def mostrar():
         )
 
     if "aviso_proyecto" in st.session_state:
-
         mensaje = st.session_state.pop("aviso_proyecto")
 
         st.success(mensaje)
@@ -251,12 +229,10 @@ def mostrar():
     proyectos = consultar("proyectos")
 
     if not clientes:
-
         st.warning(
             "Debes registrar al menos un cliente "
             "antes de crear un proyecto."
         )
-
         return
 
     c1, c2, c3 = st.columns(3)
@@ -283,12 +259,10 @@ def mostrar():
     st.divider()
 
     if opcion == "Nuevo proyecto":
-
         formulario_proyecto(clientes)
         return
 
     if not proyectos:
-
         st.info("Todavía no hay proyectos registrados.")
         return
 
@@ -321,7 +295,6 @@ def mostrar():
     ]
 
     if not filtrados:
-
         st.warning("No se encontraron proyectos.")
         return
 
@@ -350,7 +323,27 @@ def mostrar():
         "Descargar listado de proyectos",
         data=tabla.to_csv(index=False).encode("utf-8-sig"),
         file_name="proyectos_electrasafety.csv",
-        mime="text/csv"
+        mime="text/csv",
+        on_click="ignore",
+    )
+
+    informe = [
+        (str(proyecto.get("nombre") or "Proyecto"), {
+            "Código": proyecto.get("codigo"),
+            "Cliente": nombres_clientes.get(proyecto.get("cliente_id")),
+            "Ubicación": proyecto.get("ubicacion"),
+            "Responsable": proyecto.get("responsable"),
+            "Fecha de inicio": proyecto.get("fecha_inicio"),
+            "Estado": proyecto.get("estado"),
+            "Descripción": proyecto.get("descripcion"),
+            "Observaciones": proyecto.get("observaciones")
+        })
+        for proyecto in filtrados
+    ]
+    st.download_button(
+        "Descargar listado de proyectos en PDF",
+        generar_pdf("Listado de proyectos", None, informe),
+        "proyectos_electrasafety.pdf", "application/pdf", on_click="ignore"
     )
 
     st.divider()
@@ -377,7 +370,6 @@ def mostrar():
     )
 
     if accion == "Ver información":
-
         st.subheader(proyecto["nombre"])
 
         st.write("**Código:**", proyecto["codigo"])
@@ -425,7 +417,6 @@ def mostrar():
         )
 
         if activo:
-
             st.success("Este es el proyecto activo.")
 
         if st.button(
@@ -433,7 +424,6 @@ def mostrar():
             type="primary",
             disabled=activo
         ):
-
             st.session_state.proyecto_activo = seleccionado
 
             st.session_state.aviso_proyecto = (
@@ -444,11 +434,9 @@ def mostrar():
             st.rerun()
 
     elif accion == "Editar":
-
         formulario_proyecto(clientes, proyecto)
 
     elif accion == "Duplicar":
-
         st.info(
             "Se creará un proyecto independiente "
             "con un nuevo código y los mismos datos generales."
@@ -461,24 +449,19 @@ def mostrar():
         )
 
         if st.button("Duplicar proyecto"):
-
             if not nuevo_nombre.strip():
-
                 st.error("Indica el nombre de la copia.")
                 return
 
             try:
-
                 if proyecto_duplicado(
                     proyecto["cliente_id"],
                     nuevo_nombre
                 ):
-
                     st.warning(
                         "Ya existe un proyecto con ese nombre. "
                         "Escribe otro nombre para la copia."
                     )
-
                     return
 
                 campos = [
@@ -501,11 +484,9 @@ def mostrar():
                 resultado = insertar("proyectos", datos)
 
                 if not resultado:
-
                     st.error(
                         "No se pudo confirmar la duplicación."
                     )
-
                     return
 
                 notificar(
@@ -514,21 +495,17 @@ def mostrar():
                 )
 
             except Exception as error:
-
                 if "23505" in str(error):
-
                     st.warning(
                         "Ya existe un proyecto con ese nombre."
                     )
 
                 else:
-
                     st.error(
                         "No fue posible duplicar el proyecto."
                     )
 
     elif accion == "Eliminar":
-
         tablas = {
             "riesgos": "Evaluaciones de riesgos",
             "arco_electrico": "Evaluaciones de arco eléctrico",
@@ -538,28 +515,21 @@ def mostrar():
         }
 
         vinculados = {
-            nombre: len(consultar(
-                tabla,
-                {"proyecto_id": seleccionado}
-            ))
+            nombre: contar(tabla, {"proyecto_id": seleccionado})
             for tabla, nombre in tablas.items()
         }
 
         if sum(vinculados.values()) > 0:
-
             st.warning(
                 "El proyecto contiene registros técnicos "
                 "asociados y no puede eliminarse."
             )
 
             for nombre, cantidad in vinculados.items():
-
                 if cantidad:
-
                     st.write(f"**{nombre}:** {cantidad}")
 
         else:
-
             st.warning("Esta acción es permanente.")
 
             confirmar = st.checkbox(
@@ -571,26 +541,21 @@ def mostrar():
                 "Eliminar proyecto",
                 disabled=not confirmar
             ):
-
                 try:
-
                     resultado = eliminar(
                         "proyectos",
                         seleccionado
                     )
 
                     if not resultado:
-
                         st.error(
                             "No se pudo confirmar la eliminación."
                         )
-
                         return
 
                     if st.session_state.get(
                         "proyecto_activo"
                     ) == seleccionado:
-
                         st.session_state.pop(
                             "proyecto_activo", None
                         )
@@ -601,7 +566,6 @@ def mostrar():
                     )
 
                 except Exception:
-
                     st.error(
                         "No se pudo eliminar el proyecto."
                     )
