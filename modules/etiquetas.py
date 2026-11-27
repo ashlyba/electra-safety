@@ -11,8 +11,12 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph,
-    Table, TableStyle, Spacer, KeepTogether
+    SimpleDocTemplate,
+    Paragraph,
+    Table,
+    TableStyle,
+    Spacer,
+    KeepTogether
 )
 
 from database import consultar, insertar, eliminar
@@ -26,20 +30,14 @@ from modules.comunes import (
 
 
 def normalizar(valor):
-
     return " ".join(str(valor or "").split()).casefold()
 
 
 def positivo(valor):
-
     try:
-
         numero = float(valor)
-
         return math.isfinite(numero) and numero > 0
-
     except (ValueError, TypeError):
-
         return False
 
 
@@ -144,7 +142,10 @@ def generar_etiquetas(etiquetas):
         ]))
 
         elementos.append(
-            KeepTogether([tabla, Spacer(1, 18)])
+            KeepTogether([
+                tabla,
+                Spacer(1, 18)
+            ])
         )
 
     doc.build(elementos)
@@ -173,7 +174,8 @@ def preparar_etiqueta(
         "Categoría de EPP": detalle.get("Categoría"),
         "Origen": "Evaluación interna - Módulo 4",
         "Identificación de evaluación": str(referencia),
-        "Revisión": revision,
+        "Revisión": str(detalle.get("Revisión")),
+        "Código del punto": detalle.get("Código del punto"),
         "Referencia": detalle.get("Referencia arco"),
         "Responsable de preparación": responsable,
         "Fecha de preparación": str(date.today()),
@@ -301,7 +303,9 @@ def guardar_etiquetas(proyecto, etiquetas):
 
 def mostrar_internas(proyecto):
 
-    st.subheader("Etiquetas desde evaluaciones internas")
+    st.subheader(
+        "Etiquetas desde evaluaciones internas"
+    )
 
     registros = consultar(
         "arco_electrico",
@@ -316,9 +320,13 @@ def mostrar_internas(proyecto):
 
         if (
             d.get("Método aplicable") == "Sí"
+            and d.get("Probabilidad de arco") == "Sí"
+            and d.get("Revisión") is not None
             and positivo(d.get("Tensión (V)"))
             and positivo(d.get("Frontera de arco"))
-            and str(d.get("Categoría")) in ["1", "2", "3", "4"]
+            and str(d.get("Categoría")) in [
+                "1", "2", "3", "4"
+            ]
             and str(d.get("Equipo") or "").strip()
             and str(d.get("Referencia arco") or "").strip()
         ):
@@ -376,12 +384,6 @@ def mostrar_internas(proyecto):
         )
     )
 
-    revision = st.text_input(
-        "Identificación de revisión",
-        value="Rev. 01",
-        key="revision_interna"
-    )
-
     responsable = st.text_input(
         "Responsable de preparación",
         key="responsable_interno"
@@ -396,11 +398,9 @@ def mostrar_internas(proyecto):
 
         return
 
-    if not revision.strip() or not responsable.strip():
+    if not responsable.strip():
 
-        st.warning(
-            "Completa la revisión y el responsable."
-        )
+        st.warning("Completa el responsable.")
 
         return
 
@@ -408,7 +408,7 @@ def mostrar_internas(proyecto):
         preparar_etiqueta(
             opciones[x]["detalle"],
             x,
-            revision.strip(),
+            str(opciones[x]["detalle"].get("Revisión")),
             responsable.strip()
         )
         for x in seleccion
@@ -473,9 +473,13 @@ def mostrar_externas(proyecto):
 
         with c1:
 
-            equipo = st.text_input("Nombre del equipo")
+            equipo = st.text_input(
+                "Nombre del equipo"
+            )
 
-            ubicacion = st.text_input("Ubicación")
+            ubicacion = st.text_input(
+                "Ubicación"
+            )
 
             tension = st.number_input(
                 "Tensión nominal (V)",
@@ -527,7 +531,7 @@ def mostrar_externas(proyecto):
                 "Energía incidente (cal/cm²)",
                 min_value=0.0,
                 value=0.0,
-                step=0.1
+                step=0.01
             )
 
             distancia = st.number_input(
@@ -580,7 +584,9 @@ def mostrar_externas(proyecto):
             use_container_width=True
         )
 
-    clave = f"etiqueta_externa_{proyecto['id']}_{metodo}"
+    clave = (
+        f"etiqueta_externa_{proyecto['id']}_{metodo}"
+    )
 
     if generar:
 
@@ -645,7 +651,9 @@ def mostrar_externas(proyecto):
                     f"{distancia:g} mm"
                 )
 
-                detalle["Protección especificada"] = proteccion
+                detalle["Protección especificada"] = (
+                    proteccion
+                )
 
             detalle.update({
                 "Origen": "Estudio externo",
@@ -712,6 +720,34 @@ def mostrar_guardadas(proyecto):
         st.info("No hay etiquetas guardadas.")
         return
 
+    evaluaciones = {
+        str(r["id"]): r.get("detalle") or {}
+        for r in consultar(
+            "arco_electrico",
+            {"proyecto_id": proyecto["id"]}
+        )
+    }
+
+    def vigente(d):
+
+        if not str(
+            d.get("Origen", "Evaluación interna")
+        ).startswith("Evaluación interna"):
+
+            return True
+
+        actual = evaluaciones.get(
+            str(d.get("Identificación de evaluación"))
+        )
+
+        return bool(
+            actual
+            and actual.get("Método aplicable") == "Sí"
+            and actual.get("Probabilidad de arco") == "Sí"
+            and str(actual.get("Revisión"))
+            == str(d.get("Revisión"))
+        )
+
     c1, c2, c3 = st.columns(3)
 
     with c1:
@@ -767,10 +803,18 @@ def mostrar_guardadas(proyecto):
         if normalizar(buscar) not in normalizar(texto):
             continue
 
-        if origen != "Todos" and not origen_actual.startswith(origen):
+        if (
+            origen != "Todos"
+            and not origen_actual.startswith(origen)
+        ):
+
             continue
 
-        if metodo != "Todos" and metodo_actual != metodo:
+        if (
+            metodo != "Todos"
+            and metodo_actual != metodo
+        ):
+
             continue
 
         opciones[r["id"]] = r
@@ -809,15 +853,25 @@ def mostrar_guardadas(proyecto):
 
     with st.expander("Vista previa individual"):
 
-        detalle = opciones[individual].get("detalle") or {}
+        detalle = (
+            opciones[individual].get("detalle") or {}
+        )
 
         vista_previa(detalle)
+
+        if not vigente(detalle):
+
+            st.warning(
+                "Etiqueta desactualizada o sin evaluación "
+                "vigente. Genere una nueva."
+            )
 
         st.download_button(
             "Descargar etiqueta individual",
             generar_etiquetas([detalle]),
             "etiqueta_individual.pdf",
-            "application/pdf"
+            "application/pdf",
+            disabled=not vigente(detalle)
         )
 
     todas = st.checkbox(
@@ -836,7 +890,17 @@ def mostrar_guardadas(proyecto):
             format_func=nombre_etiqueta
         )
 
-    if seleccion:
+    if seleccion and not all(
+        vigente(opciones[x].get("detalle") or {})
+        for x in seleccion
+    ):
+
+        st.warning(
+            "El lote contiene etiquetas desactualizadas. "
+            "Exclúyalas antes de imprimir."
+        )
+
+    elif seleccion:
 
         st.download_button(
             f"Descargar lote de {len(seleccion)} etiquetas",
@@ -880,7 +944,9 @@ def mostrar_guardadas(proyecto):
 
                 else:
 
-                    st.error("No se confirmó la eliminación.")
+                    st.error(
+                        "No se confirmó la eliminación."
+                    )
 
             except Exception as error:
 
