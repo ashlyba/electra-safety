@@ -1,3 +1,4 @@
+from modules.reportes import cache_pdf, encabezado_pagina
 
 from io import BytesIO
 from xml.sax.saxutils import escape
@@ -21,7 +22,6 @@ GRIS = colors.HexColor("#CBD5E1")
 
 
 def ilustracion(tipo):
-
     d = Drawing(220, 140)
 
     d.add(Rect(
@@ -31,7 +31,6 @@ def ilustracion(tipo):
     ))
 
     if tipo == "candado":
-
         d.add(Rect(
             78, 70, 64, 55,
             rx=28, ry=28,
@@ -53,7 +52,6 @@ def ilustracion(tipo):
         ))
 
     elif tipo == "pinza":
-
         d.add(Circle(
             110, 105, 25,
             fillColor=None,
@@ -69,16 +67,13 @@ def ilustracion(tipo):
         ))
 
         for y in [30, 48, 66]:
-
             for x in [98, 122]:
-
                 d.add(Circle(
                     x, y, 5,
                     fillColor=colors.white
                 ))
 
     elif tipo == "interruptor":
-
         d.add(Rect(
             60, 20, 100, 100,
             fillColor=GRIS,
@@ -97,7 +92,6 @@ def ilustracion(tipo):
         ))
 
     elif tipo == "enchufe":
-
         d.add(Rect(
             45, 35, 130, 70,
             rx=20, ry=20,
@@ -117,7 +111,6 @@ def ilustracion(tipo):
         ))
 
     elif tipo == "valvula":
-
         d.add(Circle(
             110, 70, 50,
             fillColor=ROJO,
@@ -136,8 +129,17 @@ def ilustracion(tipo):
             fillColor=colors.white
         ))
 
-    elif tipo == "caja":
+    elif tipo == "seccionador":
+        d.add(Rect(46, 18, 128, 104, fillColor=GRIS, strokeColor=AZUL))
+        d.add(Line(61, 57, 101, 57, strokeColor=AZUL, strokeWidth=4))
+        d.add(Line(101, 57, 141, 87, strokeColor=AZUL, strokeWidth=4))
+        d.add(Line(144, 57, 159, 57, strokeColor=AZUL, strokeWidth=4))
+        d.add(Circle(100, 57, 5, fillColor=AZUL))
+        d.add(Circle(144, 57, 5, fillColor=AZUL))
+        d.add(Rect(81, 33, 31, 22, fillColor=ROJO, strokeColor=AZUL))
+        d.add(String(110, 7, "Seccionador abierto", textAnchor="middle", fontSize=10))
 
+    elif tipo == "caja":
         d.add(Rect(
             75, 105, 70, 22,
             rx=8, ry=8,
@@ -154,7 +156,6 @@ def ilustracion(tipo):
         ))
 
         for x in [60, 85, 110, 135, 160]:
-
             d.add(Circle(
                 x, 35, 5,
                 fillColor=colors.white
@@ -173,14 +174,13 @@ def ilustracion(tipo):
 
 
 def imagen_svg(tipo):
-
     return renderSVG.drawToString(
         ilustracion(tipo)
     )
 
 
-def generar_catalogo_pdf(dispositivos):
-
+@cache_pdf
+def generar_catalogo_pdf(dispositivos, referencia=""):
     memoria = BytesIO()
 
     doc = SimpleDocTemplate(
@@ -188,8 +188,8 @@ def generar_catalogo_pdf(dispositivos):
         pagesize=letter,
         rightMargin=40,
         leftMargin=40,
-        topMargin=40,
-        bottomMargin=40
+        topMargin=105,
+        bottomMargin=65
     )
 
     estilos = getSampleStyleSheet()
@@ -213,7 +213,6 @@ def generar_catalogo_pdf(dispositivos):
     ]
 
     for dispositivo in dispositivos:
-
         bloque = [
             Paragraph(
                 escape(dispositivo["Nombre"]),
@@ -224,9 +223,7 @@ def generar_catalogo_pdf(dispositivos):
         ]
 
         for campo, valor in dispositivo.items():
-
             if campo not in ["ID", "Nombre"]:
-
                 bloque.append(
                     Paragraph(
                         f"<b>{escape(campo)}:</b> "
@@ -240,13 +237,16 @@ def generar_catalogo_pdf(dispositivos):
         elementos.append(KeepTogether(bloque))
         elementos.append(Spacer(1, 20))
 
-    doc.build(elementos)
+    if referencia:
+        elementos.append(Paragraph(escape(referencia), estilos["Normal"]))
+
+    doc.build(elementos, onFirstPage=encabezado_pagina, onLaterPages=encabezado_pagina)
 
     return memoria.getvalue()
 
 
+@cache_pdf
 def generar_loto_pdf(etiquetas):
-
     memoria = BytesIO()
 
     doc = SimpleDocTemplate(
@@ -262,11 +262,10 @@ def generar_loto_pdf(etiquetas):
     elementos = []
 
     for detalle in etiquetas:
-
         filas = [
             [
                 Paragraph(
-                    '<font color="white" size="22">'
+                    '<font color="white" size="18">'
                     '<b>PELIGRO - NO OPERAR</b></font>',
                     estilos["Normal"]
                 )
@@ -280,7 +279,6 @@ def generar_loto_pdf(etiquetas):
         ]
 
         for campo, valor in detalle.items():
-
             filas.append([
                 Paragraph(
                     f"<b>{escape(str(campo))}:</b> "
@@ -313,7 +311,8 @@ def generar_loto_pdf(etiquetas):
         tabla = Table(
             filas,
             colWidths=[260],
-            hAlign="CENTER"
+            hAlign="CENTER",
+            splitInRow=1
         )
 
         tabla.setStyle(TableStyle([
