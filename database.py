@@ -1,7 +1,9 @@
 
 import streamlit as st
 import logging
+import time
 
+from copy import deepcopy
 from datetime import datetime
 from supabase import create_client
 
@@ -17,7 +19,6 @@ TABLAS = {
     "permisos"
 }
 
-
 NOMBRES_TABLAS = {
     "clientes": "clientes",
     "proyectos": "proyectos",
@@ -28,6 +29,8 @@ NOMBRES_TABLAS = {
     "loto": "documentos LOTO",
     "permisos": "permisos de trabajo"
 }
+
+CACHE_TTL = 60
 
 
 def registrar_conexion(correcta):
@@ -90,6 +93,8 @@ def iniciar_sesion(correo, password):
                     respuesta.user.email
                 )
 
+                invalidar_cache()
+
                 registrar_conexion(True)
 
                 return True
@@ -123,14 +128,80 @@ def validar_tabla(tabla):
         )
 
 
+def _cache():
+
+    return st.session_state.setdefault(
+        "_consulta_cache",
+        {}
+    )
+
+
+def _clave(tipo, tabla, filtros):
+
+    return (
+        tipo,
+        tabla,
+        tuple(
+            sorted(
+                (k, str(v))
+                for k, v in (filtros or {}).items()
+            )
+        )
+    )
+
+
+def _leer(clave):
+
+    entrada = _cache().get(clave)
+
+    if entrada:
+
+        if time.monotonic() - entrada[0] < CACHE_TTL:
+
+            return deepcopy(entrada[1])
+
+        _cache().pop(clave, None)
+
+    return None
+
+
+def _guardar(clave, valor):
+
+    _cache()[clave] = (
+        time.monotonic(),
+        deepcopy(valor)
+    )
+
+    return valor
+
+
+def invalidar_cache():
+
+    _cache().clear()
+
+
 def consultar(tabla, filtros=None):
 
     validar_tabla(tabla)
 
+    clave = _clave(
+        "datos",
+        tabla,
+        filtros
+    )
+
+    previo = _leer(clave)
+
+    if previo is not None:
+
+        return previo
+
     nombre = NOMBRES_TABLAS[tabla]
 
     registros = []
+
     inicio = 0
+
     limite = 500
 
     with st.spinner(f"Consultando {nombre}..."):
@@ -174,7 +245,10 @@ def consultar(tabla, filtros=None):
 
             registrar_conexion(True)
 
-            return registros
+            return _guardar(
+                clave,
+                registros
+            )
 
         except Exception:
 
@@ -205,6 +279,8 @@ def insertar(tabla, datos):
             ).execute()
 
             registrar_conexion(True)
+
+            invalidar_cache()
 
             return respuesta.data
 
@@ -244,6 +320,8 @@ def actualizar(tabla, registro_id, datos):
 
             registrar_conexion(True)
 
+            invalidar_cache()
+
             return respuesta.data
 
         except Exception:
@@ -279,6 +357,8 @@ def eliminar(tabla, registro_id):
 
             registrar_conexion(True)
 
+            invalidar_cache()
+
             return respuesta.data
 
         except Exception:
@@ -296,31 +376,66 @@ def eliminar(tabla, registro_id):
             raise
 
 
-def contar(tabla):
+def contar(tabla, filtros=None):
 
     validar_tabla(tabla)
 
+    clave = _clave(
+        "conteo",
+        tabla,
+        filtros
+    )
+
+    previo = _leer(clave)
+
+    if previo is not None:
+
+        return previo
+
+    datos = _leer(
+        _clave(
+            "datos",
+            tabla,
+            filtros
+        )
+    )
+
+    if datos is not None:
+
+        return len(datos)
+
     try:
 
-        respuesta = conectar().table(
+        consulta = conectar().table(
             tabla
         ).select(
             "id",
-            count="exact"
-        ).limit(
-            1
-        ).execute()
+            count="exact",
+            head=True
+        )
+
+        for campo, valor in (filtros or {}).items():
+
+            consulta = consulta.eq(
+                campo,
+                valor
+            )
+
+        respuesta = consulta.execute()
 
         registrar_conexion(True)
 
-        return respuesta.count or 0
+        return _guardar(
+            clave,
+            respuesta.count or 0
+        )
 
     except Exception:
 
         registrar_conexion(False)
 
         logging.exception(
-            "Error al contar registros de %s",
+            "Error al contar %s",
             tabla
         )
 
