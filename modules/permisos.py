@@ -32,6 +32,7 @@ ENERGIZADO = {
         "Referencia de evaluación de riesgos",
         "Referencia de evaluación de arco",
         "Tensión nominal",
+        "Tensión de exposición al choque",
         "Resultado de evaluación de choque",
         "Resultado de evaluación de arco",
         "Referencia y revisión del análisis técnico",
@@ -164,7 +165,7 @@ def texto(detalle, campo):
     return str(detalle.get(campo) or "").strip()
 
 
-def validar_permiso(detalle, energizado, puntos=None, procedimientos=None):
+def validar_permiso(detalle, energizado, puntos=None, procedimientos=None, riesgos=None):
     secciones = ENERGIZADO if energizado else DESENERGIZADO
     opcionales = {"Observaciones", OPCION_EXENCION, EXCEPCION}
     faltantes = []
@@ -173,7 +174,8 @@ def validar_permiso(detalle, energizado, puntos=None, procedimientos=None):
             if campo in opcionales or campo in OPCIONES_ENERGIZADO:
                 continue
             valor = texto(detalle, campo).casefold()
-            if valor in PENDIENTES or valor in NO_APLICA:
+            if (valor.rstrip(" .:") in PENDIENTES | NO_APLICA
+                    or valor.startswith(("requiere revisión", "pendiente de reevaluación"))):
                 faltantes.append(campo)
 
     if energizado:
@@ -201,6 +203,9 @@ def validar_permiso(detalle, energizado, puntos=None, procedimientos=None):
         resultado = texto(detalle, RESULTADO_ARCO).casefold()
         if "requiere evaluación" in resultado or "método no aplicable" in resultado:
             faltantes.append("Completa el resultado de arco con una evaluación documentada aplicable.")
+        riesgo_id = texto(detalle, "Referencia de evaluación de riesgos")
+        if riesgos is not None and es_id(riesgo_id) and riesgo_id not in riesgos:
+            faltantes.append("La evaluación de riesgos indicada no está disponible en este proyecto.")
         referencia = texto(detalle, "Referencia de evaluación de arco")
         if puntos is not None and referencia in puntos:
             punto = puntos[referencia]
@@ -208,6 +213,16 @@ def validar_permiso(detalle, energizado, puntos=None, procedimientos=None):
                 faltantes.append("El punto vinculado requiere revisión en el módulo 4.")
             elif texto(detalle, "Referencia y revisión del análisis técnico") != revision_punto(punto):
                 faltantes.append("Actualiza la revisión del punto vinculado en el permiso.")
+            else:
+                esperados = {
+                    "Equipo": texto(punto, "Equipo"),
+                    "Ubicación": texto(punto, "Ubicación"),
+                    RESULTADO_ARCO: f"Categoría {punto['Categoría']} según el método de tablas",
+                    FRONTERA: f"{punto['Frontera de arco']} m"
+                }
+                for campo, esperado in esperados.items():
+                    if texto(detalle, campo).casefold() != esperado.casefold():
+                        faltantes.append(f"{campo}: debe coincidir con el punto vinculado.")
         elif puntos is not None and es_id(referencia):
             faltantes.append("El punto indicado no está disponible en este proyecto.")
     else:
@@ -260,11 +275,11 @@ def mostrar():
                     horizontal=True, key=f"tipo_permiso_{proyecto['id']}")
     energizado = tipo == "Trabajo energizado"
     inicial = {}
-    puntos = procedimientos = None
+    puntos = procedimientos = riesgos = None
     st.caption("Guarda el borrador antes de cambiar el tipo, el proyecto o los documentos vinculados.")
     if energizado:
         st.info("Planificación y permiso académico según 110.3(I) y 130.3. Anexos I y J informativos.")
-        riesgo_id, _ = recuperar("evaluaciones", proyecto, "Evaluación de riesgos del módulo 3", "nombre")
+        riesgo_id, riesgos = recuperar("evaluaciones", proyecto, "Evaluación de riesgos del módulo 3", "nombre")
         arco_id, puntos = recuperar("arco_electrico", proyecto, "Punto de análisis del módulo 4", "Equipo")
         if riesgo_id:
             inicial["Referencia de evaluación de riesgos"] = riesgo_id
@@ -276,6 +291,10 @@ def mostrar():
                 "Referencia de evaluación de arco": arco_id,
                 "Referencia y revisión del análisis técnico": revision_punto(punto),
                 "Tensión nominal": f"{texto(punto, 'Tensión (V)')} V {texto(punto, 'Sistema')}",
+                "Tensión de exposición al choque": (
+                    f"{texto(punto, 'Tensión de exposición (V)')} V {texto(punto, 'Sistema')}"
+                    if punto.get("Tensión de exposición (V)") else ""
+                ),
                 "Límite de aproximación limitada": texto(punto, "Aproximación limitada"),
                 "Límite de aproximación restringida": texto(punto, "Aproximación restringida")
             })
@@ -299,7 +318,7 @@ def mostrar():
         titulo = "Permiso interno de trabajo desenergizado"
 
     def validar(detalle):
-        return validar_permiso(detalle, energizado, puntos, procedimientos)
+        return validar_permiso(detalle, energizado, puntos, procedimientos, riesgos)
 
     propios = [r.get("detalle") or {} for r in registros if (r.get("detalle") or {}).get("Tipo") == tipo]
     estados = [estado_documental(detalle, validar) for detalle in propios]
