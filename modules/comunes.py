@@ -3,8 +3,7 @@ import streamlit as st
 import logging
 
 from html import escape
-
-from database import consultar
+from database import consultar, contar
 
 
 MODULOS_TECNICOS = {
@@ -216,14 +215,14 @@ def obtener_avance(proyecto_id):
 
     for tabla, nombre in MODULOS_TECNICOS.items():
 
-        registros = consultar(
+        registros = contar(
             tabla,
             {"proyecto_id": proyecto_id}
         )
 
         resultados.append({
             "Módulo": nombre,
-            "Registros": len(registros),
+            "Registros": registros,
             "Estado": (
                 "Con registros"
                 if registros
@@ -297,16 +296,19 @@ def mostrar_estado_conexion():
     if estado is True:
 
         color = "#16803C"
+
         mensaje = "Última consulta exitosa"
 
     elif estado is False:
 
         color = "#D97706"
+
         mensaje = "Problema en la última consulta"
 
     else:
 
         color = "#64748B"
+
         mensaje = "Conexión sin verificar"
 
     st.html(f"""
@@ -482,4 +484,3 @@ def advertencia_tecnica():
         "Los resultados requieren revisión por "
         "personal calificado antes de su aplicación real."
     )
-
