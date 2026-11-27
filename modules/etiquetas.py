@@ -1,10 +1,12 @@
+from modules.reportes import cache_pdf
+from modules.tablas_nfpa import TABLA_CA, calcular_arco, resultado_arco_vigente
 
 import streamlit as st
 import pandas as pd
 import math
 
 from io import BytesIO
-from datetime import date
+from datetime import date, datetime, timezone
 from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
@@ -41,8 +43,52 @@ def positivo(valor):
         return False
 
 
-def generar_etiquetas(etiquetas):
+def fecha_vigente(fecha, hoy=None):
+    hoy = hoy or date.today()
+    try:
+        valor = str(fecha)
+        if valor.endswith(" UTC"):
+            hora = datetime.fromisoformat(valor.removesuffix(" UTC"))
+            revision = hora.replace(tzinfo=timezone.utc).astimezone().date()
+        else:
+            revision = date.fromisoformat(valor)
+    except ValueError:
+        return False
 
+    try:
+        vence = revision.replace(year=revision.year + 5)
+    except ValueError:
+        vence = revision.replace(year=revision.year + 5, day=28)
+
+    return revision <= hoy <= vence
+
+
+def etiqueta_vigente(detalle, evaluaciones, hoy=None):
+    if not fecha_vigente(detalle.get("Fecha de revisión"), hoy):
+        return False
+
+    if detalle.get("Origen") == "Estudio externo":
+        return (
+            detalle.get("Método") == "Categorías de EPP"
+            and detalle.get("Validación de alcance académico") == "Tablas 2027 auditadas"
+        )
+
+    actual = evaluaciones.get(str(detalle.get("Identificación de evaluación")))
+    if not actual or not resultado_arco_vigente(actual):
+        return False
+
+    esperada = preparar_etiqueta(
+        actual, detalle["Identificación de evaluación"], actual.get("Revisión"), ""
+    )
+    claves = (
+        "Equipo", "Ubicación", "Tensión nominal", "Frontera de arco", "Método",
+        "Categoría de EPP", "Revisión", "Código del punto", "Referencia", "Fecha de revisión"
+    )
+    return all(detalle.get(c) == esperada.get(c) for c in claves)
+
+
+@cache_pdf
+def generar_etiquetas(etiquetas):
     memoria = BytesIO()
 
     doc = SimpleDocTemplate(
@@ -71,7 +117,6 @@ def generar_etiquetas(etiquetas):
     elementos = []
 
     for detalle in etiquetas:
-
         filas = [
             [
                 Paragraph(
@@ -96,7 +141,6 @@ def generar_etiquetas(etiquetas):
         ]
 
         for campo, valor in detalle.items():
-
             if valor is None or valor == "":
                 continue
 
@@ -118,7 +162,8 @@ def generar_etiquetas(etiquetas):
         tabla = Table(
             filas,
             colWidths=[500],
-            hAlign="CENTER"
+            hAlign="CENTER",
+            splitInRow=1
         )
 
         tabla.setStyle(TableStyle([
@@ -159,7 +204,6 @@ def preparar_etiqueta(
     revision,
     responsable
 ):
-
     return {
         "Equipo": detalle.get("Equipo"),
         "Ubicación": detalle.get("Ubicación"),
@@ -179,14 +223,13 @@ def preparar_etiqueta(
         "Referencia": detalle.get("Referencia arco"),
         "Responsable de preparación": responsable,
         "Fecha de preparación": str(date.today()),
+        "Fecha de revisión": detalle.get("Fecha de revisión"),
         "Estado": "Borrador académico"
     }
 
 
 def vista_previa(detalle):
-
     with st.container(border=True):
-
         st.html("""
         <div style="
             background:#E97719;
@@ -209,16 +252,13 @@ def vista_previa(detalle):
         )
 
         for campo, valor in detalle.items():
-
             if valor is not None and valor != "":
-
                 st.write(f"**{campo}:** {valor}")
 
         st.caption("ElectraSafety Consultores")
 
 
 def identidad(detalle):
-
     return (
         normalizar(detalle.get("Equipo")),
         normalizar(detalle.get("Ubicación")),
@@ -227,7 +267,6 @@ def identidad(detalle):
 
 
 def guardar_etiquetas(proyecto, etiquetas):
-
     existentes = consultar(
         "etiquetas",
         {"proyecto_id": proyecto["id"]}
@@ -243,16 +282,13 @@ def guardar_etiquetas(proyecto, etiquetas):
     errores = []
 
     for etiqueta in etiquetas:
-
         clave = identidad(etiqueta)
 
         if clave in claves:
-
             duplicadas += 1
             continue
 
         try:
-
             respuesta = insertar(
                 "etiquetas",
                 {
@@ -262,37 +298,29 @@ def guardar_etiquetas(proyecto, etiquetas):
             )
 
             if respuesta:
-
                 cantidad += 1
                 claves.add(clave)
-
             else:
-
                 errores.append(
                     str(etiqueta.get("Equipo", "Equipo"))
                 )
 
         except Exception as error:
-
             errores.append(str(error))
 
     if errores:
-
         st.error(
             "No se pudieron guardar algunos registros."
         )
-
         st.write(errores)
 
     if duplicadas:
-
         st.warning(
             f"{duplicadas} etiquetas ya existen "
             "para el mismo equipo, ubicación y revisión."
         )
 
     if cantidad:
-
         notificar(
             "etiquetas",
             f"{cantidad} etiquetas registradas exitosamente. "
@@ -302,7 +330,6 @@ def guardar_etiquetas(proyecto, etiquetas):
 
 
 def mostrar_internas(proyecto):
-
     st.subheader(
         "Etiquetas desde evaluaciones internas"
     )
@@ -315,11 +342,11 @@ def mostrar_internas(proyecto):
     validos = []
 
     for r in registros:
-
         d = r.get("detalle") or {}
 
         if (
-            d.get("Método aplicable") == "Sí"
+            resultado_arco_vigente(d)
+            and fecha_vigente(d.get("Fecha de revisión"))
             and d.get("Probabilidad de arco") == "Sí"
             and d.get("Revisión") is not None
             and positivo(d.get("Tensión (V)"))
@@ -330,20 +357,17 @@ def mostrar_internas(proyecto):
             and str(d.get("Equipo") or "").strip()
             and str(d.get("Referencia arco") or "").strip()
         ):
-
             validos.append(r)
 
     c1, c2 = st.columns(2)
 
     with c1:
-
         buscar = st.text_input(
             "Buscar equipo o ubicación",
             key="etiquetas_internas_buscar"
         )
 
     with c2:
-
         categoria = st.selectbox(
             "Categoría de EPP",
             ["Todas", "1", "2", "3", "4"],
@@ -353,7 +377,6 @@ def mostrar_internas(proyecto):
     opciones = {}
 
     for r in validos:
-
         d = r.get("detalle") or {}
 
         texto = (
@@ -369,7 +392,6 @@ def mostrar_internas(proyecto):
             categoria != "Todas"
             and str(d.get("Categoría")) != categoria
         ):
-
             continue
 
         opciones[r["id"]] = r
@@ -390,18 +412,14 @@ def mostrar_internas(proyecto):
     )
 
     if not seleccion:
-
         st.info(
             "Selecciona evaluaciones completas del módulo 4 "
             "con el método de categorías aplicable."
         )
-
         return
 
     if not responsable.strip():
-
         st.warning("Completa el responsable.")
-
         return
 
     etiquetas = [
@@ -420,35 +438,31 @@ def mostrar_internas(proyecto):
     )
 
     for etiqueta in etiquetas:
-
         vista_previa(etiqueta)
 
     c1, c2 = st.columns(2)
 
     with c1:
-
         st.download_button(
             "Descargar etiquetas PDF",
             generar_etiquetas(etiquetas),
             "etiquetas_internas.pdf",
             "application/pdf",
-            use_container_width=True
+            use_container_width=True,
+            on_click="ignore",
         )
 
     with c2:
-
         if st.button(
             "Guardar etiquetas",
             type="primary",
             key="guardar_internas",
             use_container_width=True
         ):
-
             guardar_etiquetas(proyecto, etiquetas)
 
 
 def mostrar_externas(proyecto):
-
     st.subheader("Etiquetas con datos externos")
 
     st.info(
@@ -457,22 +471,13 @@ def mostrar_externas(proyecto):
         "la energía incidente ni determina el EPP."
     )
 
-    metodo = st.radio(
-        "Método utilizado en la evaluación",
-        [
-            "Categorías de EPP",
-            "Energía incidente"
-        ],
-        horizontal=True,
-        key="metodo_externo"
-    )
+    metodo = "Categorías de EPP"
+    st.caption("Las nuevas etiquetas externas requieren una categoría documentada por el método de tablas.")
 
-    with st.form(f"externa_{metodo}"):
-
+    with st.form(f"externa_{proyecto['id']}_{metodo}"):
         c1, c2 = st.columns(2)
 
         with c1:
-
             equipo = st.text_input(
                 "Nombre del equipo"
             )
@@ -494,7 +499,6 @@ def mostrar_externas(proyecto):
             )
 
         with c2:
-
             frontera = st.number_input(
                 "Frontera de arco eléctrico (m)",
                 min_value=0.0,
@@ -513,38 +517,25 @@ def mostrar_externas(proyecto):
                 max_value=date.today()
             )
 
-        categoria = None
-        energia = None
-        distancia = None
-        proteccion = None
+        categoria = st.selectbox(
+            "Categoría determinada por el estudio", [1, 2, 3, 4], index=None
+        )
 
-        if metodo == "Categorías de EPP":
-
-            categoria = st.selectbox(
-                "Categoría determinada por el estudio",
-                [1, 2, 3, 4]
-            )
-
-        else:
-
-            energia = st.number_input(
-                "Energía incidente (cal/cm²)",
-                min_value=0.0,
-                value=0.0,
-                step=0.01
-            )
-
-            distancia = st.number_input(
-                "Distancia de trabajo (mm)",
-                min_value=0.0,
-                value=0.0,
-                step=1.0
-            )
-
-            proteccion = st.text_input(
-                "Protección especificada en el estudio"
-            )
-
+        st.subheader("Fila y condiciones documentadas")
+        tipo_equipo = st.selectbox(
+            "Equipo de la fila", [*TABLA_CA, "Baterías y equipos de CC"], index=None
+        )
+        corriente = st.number_input("Corriente de falla disponible (kA)", min_value=0.0, value=0.0)
+        tiempo = st.number_input("Tiempo de despeje o duración del arco (s)", min_value=0.0, value=0.0, format="%.4f")
+        distancia = st.number_input("Distancia de trabajo (mm)", min_value=0.0, value=0.0)
+        fila_mcc = st.selectbox(
+            "Fila MCC documentada", [None, 2, 4],
+            format_func=lambda x: {None: "Sin selección", 2: "65 kA y 0,03 s", 4: "42 kA y 0,33 s"}[x]
+        )
+        cc_confirmada = st.checkbox(
+            "Si es CC: al aire libre, sin exposición a electrolito y fuera del artículo 360"
+        )
+        st.caption("Verifica en el estudio la necesidad de EPP, el equipo y las notas antes de transcribir los datos.")
         st.subheader("Trazabilidad y revisión")
 
         fuente = st.text_input(
@@ -573,9 +564,8 @@ def mostrar_externas(proyecto):
         )
 
         confirmar = st.checkbox(
-            "Confirmo que los datos fueron transcritos "
-            "de la fuente identificada y revisados "
-            "para fines académicos."
+            "Confirmo que verifiqué la fila, límites, notas y excepciones con la evidencia "
+            "del estudio y transcribí sus datos para fines académicos."
         )
 
         generar = st.form_submit_button(
@@ -589,9 +579,9 @@ def mostrar_externas(proyecto):
     )
 
     if generar:
-
         st.session_state.pop(clave, None)
 
+        tabulado = calcular_arco(sistema, tipo_equipo, tension, corriente, tiempo, distancia, fila_mcc)
         completos = all([
             equipo.strip(),
             ubicacion.strip(),
@@ -603,32 +593,30 @@ def mostrar_externas(proyecto):
             autor.strip(),
             revisor.strip(),
             observaciones.strip(),
+            categoria,
             confirmar
         ])
 
-        if metodo == "Energía incidente":
-
-            completos = completos and all([
-                energia > 0,
-                distancia > 0,
-                proteccion.strip()
-            ])
-
         if not completos:
-
             st.error(
                 "Completa todos los datos técnicos "
                 "y la revisión documental."
             )
 
-        elif fecha_revision < fecha_estudio:
+        elif (not tabulado["aplicable"] or (sistema == "CC" and not cc_confirmada)
+              or tabulado["categoria"] != categoria
+              or not math.isclose(tabulado["frontera"], frontera, rel_tol=0, abs_tol=1e-9)):
+            st.error("Los parámetros, la categoría y la frontera deben coincidir con la fila documentada.")
 
+        elif not fecha_vigente(fecha_revision):
+            st.error("Documenta una revisión vigente dentro de los últimos cinco años.")
+
+        elif fecha_revision < fecha_estudio:
             st.error(
                 "La revisión no puede ser anterior al estudio."
             )
 
         else:
-
             detalle = {
                 "Equipo": equipo.strip(),
                 "Ubicación": ubicacion.strip(),
@@ -637,26 +625,17 @@ def mostrar_externas(proyecto):
                 "Método": metodo
             }
 
-            if metodo == "Categorías de EPP":
-
-                detalle["Categoría de EPP"] = categoria
-
-            else:
-
-                detalle["Energía incidente"] = (
-                    f"{energia:g} cal/cm²"
-                )
-
-                detalle["Distancia de trabajo"] = (
-                    f"{distancia:g} mm"
-                )
-
-                detalle["Protección especificada"] = (
-                    proteccion
-                )
+            detalle["Categoría de EPP"] = categoria
 
             detalle.update({
                 "Origen": "Estudio externo",
+                "Validación de alcance académico": "Tablas 2027 auditadas",
+                "Tabla": tabulado["referencia"],
+                "Equipo de la fila": tipo_equipo,
+                "Corriente de falla disponible (kA)": corriente,
+                "Tiempo de despeje o duración (s)": tiempo,
+                "Distancia de trabajo (mm)": distancia,
+                "Fila MCC documentada": fila_mcc,
                 "Fuente técnica": fuente.strip(),
                 "Referencia": referencia.strip(),
                 "Autor del estudio": autor.strip(),
@@ -673,7 +652,6 @@ def mostrar_externas(proyecto):
     detalle = st.session_state.get(clave)
 
     if detalle:
-
         st.subheader("Vista previa")
 
         st.caption(
@@ -686,28 +664,25 @@ def mostrar_externas(proyecto):
         c1, c2 = st.columns(2)
 
         with c1:
-
             st.download_button(
                 "Descargar etiqueta PDF",
                 generar_etiquetas([detalle]),
                 "etiqueta_externa.pdf",
                 "application/pdf",
-                use_container_width=True
+                use_container_width=True,
+                on_click="ignore",
             )
 
         with c2:
-
             if st.button(
                 "Guardar etiqueta externa",
                 type="primary",
                 use_container_width=True
             ):
-
                 guardar_etiquetas(proyecto, [detalle])
 
 
 def mostrar_guardadas(proyecto):
-
     st.subheader("Etiquetas registradas")
 
     registros = consultar(
@@ -716,7 +691,6 @@ def mostrar_guardadas(proyecto):
     )
 
     if not registros:
-
         st.info("No hay etiquetas guardadas.")
         return
 
@@ -729,36 +703,17 @@ def mostrar_guardadas(proyecto):
     }
 
     def vigente(d):
-
-        if not str(
-            d.get("Origen", "Evaluación interna")
-        ).startswith("Evaluación interna"):
-
-            return True
-
-        actual = evaluaciones.get(
-            str(d.get("Identificación de evaluación"))
-        )
-
-        return bool(
-            actual
-            and actual.get("Método aplicable") == "Sí"
-            and actual.get("Probabilidad de arco") == "Sí"
-            and str(actual.get("Revisión"))
-            == str(d.get("Revisión"))
-        )
+        return etiqueta_vigente(d, evaluaciones)
 
     c1, c2, c3 = st.columns(3)
 
     with c1:
-
         buscar = st.text_input(
             "Buscar equipo o ubicación",
             key="buscar_guardadas"
         )
 
     with c2:
-
         origen = st.selectbox(
             "Origen",
             [
@@ -769,7 +724,6 @@ def mostrar_guardadas(proyecto):
         )
 
     with c3:
-
         metodo = st.selectbox(
             "Método",
             [
@@ -779,10 +733,11 @@ def mostrar_guardadas(proyecto):
             ]
         )
 
+    estado = st.selectbox("Estado de etiqueta", ["Todas", "Vigentes", "Para revisar"])
+    categoria = st.selectbox("Categoría guardada", ["Todas", "1", "2", "3", "4"])
     opciones = {}
 
     for r in registros:
-
         d = r.get("detalle") or {}
 
         texto = " ".join([
@@ -802,25 +757,26 @@ def mostrar_guardadas(proyecto):
 
         if normalizar(buscar) not in normalizar(texto):
             continue
+        if categoria != "Todas" and str(d.get("Categoría de EPP")) != categoria:
+            continue
+        if (estado == "Vigentes" and not vigente(d)) or (estado == "Para revisar" and vigente(d)):
+            continue
 
         if (
             origen != "Todos"
             and not origen_actual.startswith(origen)
         ):
-
             continue
 
         if (
             metodo != "Todos"
             and metodo_actual != metodo
         ):
-
             continue
 
         opciones[r["id"]] = r
 
     if not opciones:
-
         st.info("No hay resultados para los filtros.")
         return
 
@@ -834,7 +790,6 @@ def mostrar_guardadas(proyecto):
     )
 
     def nombre_etiqueta(x):
-
         d = opciones[x].get("detalle") or {}
 
         return (
@@ -852,38 +807,30 @@ def mostrar_guardadas(proyecto):
     )
 
     with st.expander("Vista previa individual"):
-
         detalle = (
             opciones[individual].get("detalle") or {}
         )
 
         vista_previa(detalle)
 
-        if not vigente(detalle):
-
-            st.warning(
-                "Etiqueta desactualizada o sin evaluación "
-                "vigente. Genere una nueva."
+        if vigente(detalle):
+            st.download_button(
+                "Descargar etiqueta individual",
+                generar_etiquetas([detalle]),
+                "etiqueta_individual.pdf",
+                "application/pdf",
+                on_click="ignore",
             )
-
-        st.download_button(
-            "Descargar etiqueta individual",
-            generar_etiquetas([detalle]),
-            "etiqueta_individual.pdf",
-            "application/pdf",
-            disabled=not vigente(detalle)
-        )
+        else:
+            st.warning("Etiqueta desactualizada o fuera del alcance académico de impresión. Revise y genere una nueva.")
 
     todas = st.checkbox(
         "Seleccionar todas las etiquetas filtradas"
     )
 
     if todas:
-
         seleccion = list(opciones)
-
     else:
-
         seleccion = st.multiselect(
             "Seleccionar etiquetas para imprimir",
             list(opciones),
@@ -894,14 +841,12 @@ def mostrar_guardadas(proyecto):
         vigente(opciones[x].get("detalle") or {})
         for x in seleccion
     ):
-
         st.warning(
             "El lote contiene etiquetas desactualizadas. "
             "Exclúyalas antes de imprimir."
         )
 
     elif seleccion:
-
         st.download_button(
             f"Descargar lote de {len(seleccion)} etiquetas",
             generar_etiquetas([
@@ -911,11 +856,11 @@ def mostrar_guardadas(proyecto):
             "lote_etiquetas_electricas.pdf",
             "application/pdf",
             type="primary",
-            use_container_width=True
+            use_container_width=True,
+            on_click="ignore",
         )
 
     with st.expander("Eliminar etiqueta"):
-
         eliminar_id = st.selectbox(
             "Etiqueta que desea eliminar",
             list(opciones),
@@ -932,29 +877,22 @@ def mostrar_guardadas(proyecto):
             "Eliminar etiqueta",
             disabled=not confirmar
         ):
-
             try:
-
                 if eliminar("etiquetas", eliminar_id):
-
                     notificar(
                         "etiquetas",
                         "Etiqueta eliminada correctamente."
                     )
-
                 else:
-
                     st.error(
                         "No se confirmó la eliminación."
                     )
 
             except Exception as error:
-
                 st.error(str(error))
 
 
 def mostrar():
-
     st.title("05. Diseño e impresión de etiquetas")
 
     st.write(
@@ -978,13 +916,10 @@ def mostrar():
     ])
 
     with tab1:
-
         mostrar_internas(proyecto)
 
     with tab2:
-
         mostrar_externas(proyecto)
 
     with tab3:
-
         mostrar_guardadas(proyecto)
