@@ -23,6 +23,7 @@ from reportlab.platypus import (
     SimpleDocTemplate,
     Paragraph,
     Spacer,
+    CondPageBreak,
     Table,
     TableStyle
 )
@@ -275,7 +276,7 @@ def _generar_pdf(titulo, informacion, secciones, referencia, mostrar_proyecto):
             textColor=AZUL,
             spaceBefore=12,
             spaceAfter=8,
-            keepWithNext=True
+            keepWithNext=False
         )
     )
 
@@ -405,6 +406,7 @@ def _generar_pdf(titulo, informacion, secciones, referencia, mostrar_proyecto):
         agregar_tabla(informacion)
 
     for nombre, campos in secciones:
+        elementos.append(CondPageBreak(65))
         elementos.append(
             Paragraph(
                 texto_seguro(nombre),
@@ -415,6 +417,7 @@ def _generar_pdf(titulo, informacion, secciones, referencia, mostrar_proyecto):
         agregar_tabla(campos)
 
     if referencia:
+        elementos.append(CondPageBreak(65))
         elementos.append(
             Paragraph(
                 "Referencia técnica",
