@@ -1,5 +1,11 @@
-
+from collections import OrderedDict
+from functools import wraps
+from hashlib import sha256
 from io import BytesIO
+import json
+
+import streamlit as st
+from streamlit.runtime.scriptrunner import get_script_run_ctx
 from pathlib import Path
 from datetime import datetime
 from xml.sax.saxutils import escape
@@ -35,8 +41,29 @@ LOGO = (
 )
 
 
-def texto_seguro(valor):
+def cache_pdf(funcion):
+    """Conserva PDFs recientes de la sesión, con un límite de memoria."""
+    @wraps(funcion)
+    def obtener(*args, **kwargs):
+        if get_script_run_ctx(suppress_warning=True) is None:
+            return funcion(*args, **kwargs)
+        contenido = json.dumps([args, kwargs], ensure_ascii=False, default=str)
+        clave = (funcion.__module__, funcion.__name__, sha256(contenido.encode()).digest())
+        cache = st.session_state.setdefault("_pdf_cache", OrderedDict())
+        if clave in cache:
+            cache.move_to_end(clave)
+            return cache[clave]
+        pdf = funcion(*args, **kwargs)
+        if len(pdf) <= 2_000_000:
+            cache[clave] = pdf
+            cache.move_to_end(clave)
+            while len(cache) > 8 or sum(map(len, cache.values())) > 6_000_000:
+                cache.popitem(last=False)
+        return pdf
+    return obtener
 
+
+def texto_seguro(valor):
     if valor is None or valor == "":
         return "No registrado"
 
@@ -44,14 +71,12 @@ def texto_seguro(valor):
         return "Sí" if valor else "No"
 
     if isinstance(valor, dict):
-
         valor = "\n".join(
             f"{campo}: {contenido}"
             for campo, contenido in valor.items()
         )
 
     elif isinstance(valor, (list, tuple)):
-
         valor = "\n".join(
             str(elemento)
             for elemento in valor
@@ -63,7 +88,6 @@ def texto_seguro(valor):
 
 
 def pie_pagina(canvas, doc):
-
     ancho, alto = letter
 
     canvas.saveState()
@@ -100,7 +124,6 @@ def pie_pagina(canvas, doc):
 
 
 def encabezado_pagina(canvas, doc):
-
     ancho, alto = letter
 
     canvas.saveState()
@@ -117,9 +140,7 @@ def encabezado_pagina(canvas, doc):
     )
 
     if LOGO.exists():
-
         try:
-
             imagen = ImageReader(str(LOGO))
 
             w, h = imagen.getSize()
@@ -139,7 +160,6 @@ def encabezado_pagina(canvas, doc):
             )
 
         except Exception:
-
             canvas.setFillColor(colors.white)
             canvas.setFont("Helvetica-Bold", 14)
 
@@ -150,7 +170,6 @@ def encabezado_pagina(canvas, doc):
             )
 
     else:
-
         canvas.setFillColor(colors.white)
         canvas.setFont("Helvetica-Bold", 14)
 
@@ -198,13 +217,27 @@ def encabezado_pagina(canvas, doc):
     pie_pagina(canvas, doc)
 
 
-def generar_pdf(
-    titulo,
-    proyecto,
-    secciones,
-    referencia=""
-):
+def generar_pdf(titulo, proyecto, secciones, referencia=""):
+    proyecto = proyecto or {}
+    cliente = proyecto.get("nombre_cliente")
+    if cliente is None and proyecto.get("cliente_id") is not None:
+        clientes = consultar("clientes")
+        cliente = next(
+            (c.get("nombre_empresa") for c in clientes if c["id"] == proyecto["cliente_id"]),
+            None
+        )
 
+    informacion = {
+        "Cliente": cliente,
+        "Proyecto": proyecto.get("nombre"),
+        "Código del proyecto": proyecto.get("codigo"),
+        "Fecha de emisión": datetime.now().strftime("%d/%m/%Y")
+    }
+    return _generar_pdf(titulo, informacion, secciones, referencia, bool(proyecto))
+
+
+@cache_pdf
+def _generar_pdf(titulo, informacion, secciones, referencia, mostrar_proyecto):
     memoria = BytesIO()
 
     doc = SimpleDocTemplate(
@@ -278,47 +311,11 @@ def generar_pdf(
         )
     )
 
-    proyecto = proyecto or {}
-
-    cliente = {}
-
-    if proyecto.get("cliente_id"):
-
-        clientes = consultar(
-            "clientes",
-            {
-                "id": proyecto["cliente_id"]
-            }
-        )
-
-        cliente = (
-            clientes[0]
-            if clientes
-            else {}
-        )
-
-    informacion = {
-        "Cliente": cliente.get(
-            "nombre_empresa"
-        ),
-        "Proyecto": proyecto.get(
-            "nombre"
-        ),
-        "Código del proyecto": proyecto.get(
-            "codigo"
-        ),
-        "Fecha de emisión": datetime.now().strftime(
-            "%d/%m/%Y"
-        )
-    }
-
     def agregar_tabla(campos):
-
         if not campos:
             return
 
         if not isinstance(campos, dict):
-
             campos = {
                 "Información": campos
             }
@@ -326,7 +323,6 @@ def generar_pdf(
         filas = []
 
         for nombre, valor in campos.items():
-
             filas.append([
                 Paragraph(
                     "<b>"
@@ -343,8 +339,8 @@ def generar_pdf(
         tabla = Table(
             filas,
             colWidths=[
-                doc.width * 0.30,
-                doc.width * 0.70
+                (doc.width - 12) * 0.30,
+                (doc.width - 12) * 0.70
             ],
             hAlign="LEFT",
             splitByRow=1,
@@ -404,17 +400,11 @@ def generar_pdf(
             Spacer(1, 10)
         )
 
-    elementos.append(
-        Paragraph(
-            "Identificación del proyecto",
-            estilos["SeccionElectra"]
-        )
-    )
-
-    agregar_tabla(informacion)
+    if mostrar_proyecto:
+        elementos.append(Paragraph("Identificación del proyecto", estilos["SeccionElectra"]))
+        agregar_tabla(informacion)
 
     for nombre, campos in secciones:
-
         elementos.append(
             Paragraph(
                 texto_seguro(nombre),
@@ -425,7 +415,6 @@ def generar_pdf(
         agregar_tabla(campos)
 
     if referencia:
-
         elementos.append(
             Paragraph(
                 "Referencia técnica",
