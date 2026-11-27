@@ -1,4 +1,3 @@
-
 import streamlit as st
 import logging
 
@@ -19,7 +18,7 @@ from modules.comunes import mostrar_avance
 BASE_DIR = Path(__file__).resolve().parent
 LOGO = BASE_DIR / "logo.png"
 
-VERSION = "1.0"
+VERSION = "1.1"
 
 INTEGRANTES = [
     "Ashly Barrantes",
@@ -80,48 +79,38 @@ MODULOS = {
 
 
 def navegar(destino):
-
     actual = st.session_state.get(
         "pagina_actual",
         "Inicio"
     )
 
     if destino == actual:
-
         return
 
-    if actual in (
-        "Inicio",
-        "Manual de uso"
-    ):
-
+    if actual in ("Inicio", "Manual de uso"):
         st.session_state[
             "pagina_actual"
         ] = destino
 
     else:
-
         st.session_state[
             "destino_pendiente"
         ] = destino
 
 
 def confirmar_navegacion():
-
     destino = st.session_state.pop(
         "destino_pendiente",
         None
     )
 
     if destino:
-
         st.session_state[
             "pagina_actual"
         ] = destino
 
 
 def cancelar_navegacion():
-
     st.session_state.pop(
         "destino_pendiente",
         None
@@ -129,7 +118,6 @@ def cancelar_navegacion():
 
 
 def mostrar_login():
-
     st.html("""
     <style>
     [data-testid="stSidebar"] {
@@ -141,9 +129,7 @@ def mostrar_login():
     _, centro, _ = st.columns([1, 1.5, 1])
 
     with centro:
-
         if LOGO.exists():
-
             st.image(
                 str(LOGO),
                 use_container_width=True
@@ -157,7 +143,6 @@ def mostrar_login():
         )
 
         with st.form("login"):
-
             st.subheader("Acceso al sistema")
 
             correo = st.text_input(
@@ -176,32 +161,25 @@ def mostrar_login():
             )
 
         if entrar:
-
             if not correo.strip() or not password:
-
                 st.warning(
                     "Complete ambos campos."
                 )
 
             else:
-
                 try:
-
                     if iniciar_sesion(
                         correo.strip(),
                         password
                     ):
-
                         st.rerun()
 
                     else:
-
                         st.error(
                             "No se pudo iniciar sesión."
                         )
 
                 except Exception:
-
                     st.error(
                         "Verifique las credenciales "
                         "y la conexión."
@@ -214,7 +192,6 @@ def mostrar_login():
 
 
 if not st.session_state.get("usuario"):
-
     mostrar_login()
     st.stop()
 
@@ -229,7 +206,6 @@ pagina = st.session_state[
 ]
 
 if pagina not in MODULOS:
-
     pagina = "Inicio"
 
     st.session_state[
@@ -242,16 +218,12 @@ clientes = {}
 conexion_correcta = True
 
 try:
-
-    proyectos = consultar("proyectos")
-
-    clientes = {
-        c["id"]: c
-        for c in consultar("clientes")
-    }
+    if pagina == "Inicio" or pagina.startswith(("03", "04", "05", "06", "07")) or st.session_state.get("proyecto_activo") is not None:
+        proyectos = consultar("proyectos")
+        if proyectos:
+            clientes = {c["id"]: c for c in consultar("clientes")}
 
 except Exception:
-
     conexion_correcta = False
 
     logging.exception(
@@ -268,8 +240,7 @@ activo = st.session_state.get(
     "proyecto_activo"
 )
 
-if conexion_correcta and activo not in opciones:
-
+if conexion_correcta and (pagina == "Inicio" or activo is not None) and activo not in opciones:
     activo = (
         next(iter(opciones))
         if opciones
@@ -282,9 +253,7 @@ if conexion_correcta and activo not in opciones:
 
 
 with st.sidebar:
-
     if LOGO.exists():
-
         st.image(
             str(LOGO),
             use_container_width=True
@@ -319,11 +288,9 @@ with st.sidebar:
     }
 
     for grupo, nombres in grupos.items():
-
         st.caption(grupo)
 
         for nombre in nombres:
-
             st.button(
                 nombre,
                 key=f"nav_{nombre}",
@@ -341,40 +308,7 @@ with st.sidebar:
 
     st.markdown("### Proyecto activo")
 
-    if activo in opciones:
-
-        proyecto = opciones[activo]
-
-        cliente = clientes.get(
-            proyecto.get("cliente_id"),
-            {}
-        )
-
-        st.write(
-            cliente.get(
-                "nombre_empresa",
-                "Cliente"
-            )
-        )
-
-        st.caption(
-            proyecto.get("nombre", "")
-        )
-
-        st.caption(
-            proyecto.get("codigo", "")
-        )
-
-        mostrar_avance(
-            activo,
-            compacto=True
-        )
-
-    else:
-
-        st.caption(
-            "Sin proyecto disponible."
-        )
+    panel_proyecto = st.empty()
 
     st.divider()
 
@@ -388,7 +322,6 @@ with st.sidebar:
         "Cerrar sesión",
         use_container_width=True
     ):
-
         st.session_state[
             "confirmar_salida"
         ] = True
@@ -403,7 +336,6 @@ with st.sidebar:
     dismissible=False
 )
 def dialogo_salida():
-
     st.warning(
         "Guarde los cambios antes de cerrar sesión."
     )
@@ -415,13 +347,10 @@ def dialogo_salida():
         type="primary",
         use_container_width=True
     ):
-
         try:
-
             cerrar_sesion()
 
         except Exception:
-
             logging.exception(
                 "Error al cerrar sesión"
             )
@@ -439,7 +368,6 @@ def dialogo_salida():
         "Cancelar",
         use_container_width=True
     ):
-
         st.session_state.pop(
             "confirmar_salida",
             None
@@ -453,7 +381,6 @@ def dialogo_salida():
     dismissible=False
 )
 def dialogo_navegacion():
-
     st.warning(
         "Los cambios sin guardar podrían perderse "
         "al abandonar este módulo."
@@ -476,7 +403,6 @@ def dialogo_navegacion():
         type="primary",
         use_container_width=True
     ):
-
         confirmar_navegacion()
         st.rerun()
 
@@ -484,23 +410,19 @@ def dialogo_navegacion():
         "Permanecer",
         use_container_width=True
     ):
-
         cancelar_navegacion()
         st.rerun()
 
 
 if st.session_state.get("confirmar_salida"):
-
     cancelar_navegacion()
     dialogo_salida()
 
 elif st.session_state.get("destino_pendiente"):
-
     dialogo_navegacion()
 
 
 def tarjeta(nombre):
-
     ruta, descripcion = MODULOS[nombre]
 
     st.html(f"""
@@ -522,7 +444,6 @@ def tarjeta(nombre):
 
 
 def mostrar_inicio():
-
     st.html("""
     <div class="banner">
         <div class="banner-titulo">
@@ -541,19 +462,20 @@ def mostrar_inicio():
     """)
 
     st.subheader("Resumen general")
+    if not conexion_correcta:
+        st.warning("Los datos generales no se pudieron consultar.")
 
     try:
-
         c1, c2, c3, c4 = st.columns(4)
 
         c1.metric(
             "Clientes",
-            contar("clientes")
+            len(clientes) if proyectos else contar("clientes")
         )
 
         c2.metric(
             "Proyectos",
-            contar("proyectos")
+            len(proyectos)
         )
 
         c3.metric(
@@ -570,17 +492,12 @@ def mostrar_inicio():
         )
 
     except Exception:
-
-        st.warning(
-            "Indicadores temporalmente no disponibles."
-        )
+        st.warning("Indicadores temporalmente no disponibles.")
 
     st.subheader("Proyecto de trabajo")
 
     with st.container(border=True):
-
         if opciones:
-
             ids = list(opciones)
 
             actual = st.session_state.get(
@@ -588,7 +505,6 @@ def mostrar_inicio():
             )
 
             if actual not in ids:
-
                 actual = ids[0]
 
             st.session_state[
@@ -596,7 +512,6 @@ def mostrar_inicio():
             ] = actual
 
             def cambiar():
-
                 st.session_state[
                     "proyecto_activo"
                 ] = st.session_state[
@@ -636,7 +551,6 @@ def mostrar_inicio():
             mostrar_avance(seleccionado)
 
         else:
-
             st.info(
                 "Registre un cliente y un proyecto "
                 "para comenzar."
@@ -653,11 +567,9 @@ def mostrar_inicio():
     c1, c2 = st.columns(2)
 
     with c1:
-
         tarjeta("01. Clientes")
 
     with c2:
-
         tarjeta("02. Proyectos")
 
     st.subheader("Herramientas técnicas")
@@ -669,16 +581,13 @@ def mostrar_inicio():
         len(herramientas),
         3
     ):
-
         columnas = st.columns(3)
 
         for columna, nombre in zip(
             columnas,
             herramientas[i:i+3]
         ):
-
             with columna:
-
                 tarjeta(nombre)
 
     st.divider()
@@ -686,7 +595,6 @@ def mostrar_inicio():
     with st.expander(
         "Acerca del sistema"
     ):
-
         st.write(
             "Maletín digital académico de apoyo "
             "a la gestión de seguridad eléctrica."
@@ -709,9 +617,7 @@ def mostrar_inicio():
     with st.expander(
         "Equipo de desarrollo"
     ):
-
         for integrante in INTEGRANTES:
-
             st.write(integrante)
 
     st.button(
@@ -722,11 +628,9 @@ def mostrar_inicio():
 
 
 if pagina == "Inicio":
-
     mostrar_inicio()
 
 else:
-
     st.caption(
         "Electra Safe 360 / " + pagina
     )
@@ -739,7 +643,6 @@ else:
     )
 
     try:
-
         ruta = MODULOS[pagina][0]
 
         modulo = import_module(
@@ -749,7 +652,6 @@ else:
         modulo.mostrar()
 
     except Exception:
-
         st.error(
             "No se pudo cargar el módulo."
         )
@@ -758,6 +660,19 @@ else:
             "Error al cargar %s",
             pagina
         )
+
+
+with panel_proyecto.container():
+    proyecto_sidebar = opciones.get(st.session_state.get("proyecto_activo"))
+    if proyecto_sidebar:
+        cliente_sidebar = clientes.get(proyecto_sidebar.get("cliente_id"), {})
+        st.write(cliente_sidebar.get("nombre_empresa", "Cliente"))
+        st.caption(proyecto_sidebar.get("nombre", ""))
+        st.caption(proyecto_sidebar.get("codigo", ""))
+        if pagina != "Inicio":
+            mostrar_avance(proyecto_sidebar["id"], compacto=True)
+    else:
+        st.caption("Sin proyecto disponible.")
 
 
 st.html(f"""
