@@ -21,6 +21,8 @@ from modules.comunes import (
 
 from modules.tablas_nfpa import (
     TABLA_CA,
+    TAREAS_ARCO,
+    probabilidad_arco,
     calcular_arco,
     limites_choque,
     clase_guante,
@@ -219,7 +221,36 @@ def formulario_evaluacion(
                 "Anormal",
                 "No determinada"
             ],
-            index=2
+            index=[
+                "Normal",
+                "Anormal",
+                "No determinada"
+            ].index(
+                anterior.get(
+                    "Condición del equipo",
+                    "No determinada"
+                )
+            )
+        )
+
+        fila_tarea = st.selectbox(
+            "Fila normativa de la tarea "
+            "(verifique todas sus condiciones)",
+            [None] + list(range(len(TAREAS_ARCO))),
+            format_func=lambda i: (
+                "No determinada / otra tarea"
+                if i is None
+                else TAREAS_ARCO[i][0]
+            ),
+            index=0
+        )
+
+        evidencia_tarea = st.text_area(
+            "Justificación de correspondencia "
+            "con la fila y condición de funcionamiento",
+            value=anterior.get(
+                "Justificación de tarea", ""
+            )
         )
 
         st.subheader(
@@ -380,7 +411,15 @@ def formulario_evaluacion(
             distancia
         )
 
+        probabilidad = probabilidad_arco(
+            fila_tarea,
+            estado
+        )
+
         condiciones = all([
+            probabilidad is True,
+            bool(evidencia_tarea.strip()),
+            bool(responsable.strip()),
             requiere_epp,
             clasificacion,
             mantenimiento,
@@ -423,7 +462,14 @@ def formulario_evaluacion(
             else "No determinada"
         )
 
-        if altitud > 900:
+        if (
+            altitud > 900
+            and choque
+            and isinstance(
+                choque.get("restringida"),
+                (int, float)
+            )
+        ):
 
             restringida = (
                 "Requiere revisión por altitud"
@@ -439,65 +485,120 @@ def formulario_evaluacion(
         )
 
         detalle = {
+
             "Código del punto": anterior.get(
                 "Código del punto"
             ) or (
                 "AE-" + uuid4().hex[:8].upper()
             ),
+
             "Revisión": (
                 int(
                     anterior.get("Revisión") or 0
                 ) + 1
             ),
+
             "Fecha de revisión": fecha_actual(),
+
             "Equipo": nombre.strip(),
+
             "Tipo de equipo": equipo,
+
             "Ubicación": ubicacion.strip(),
+
             "Tarea": tarea.strip(),
+
+            "Fila normativa de tarea": (
+                TAREAS_ARCO[fila_tarea][0]
+                if fila_tarea is not None
+                else "No determinada"
+            ),
+
+            "Probabilidad de arco": (
+                "Sí"
+                if probabilidad is True
+                else "No"
+                if probabilidad is False
+                else "No determinada"
+            ),
+
+            "Justificación de tarea":
+                evidencia_tarea,
+
             "Condición del equipo": estado,
+
             "Sistema": sistema,
+
             "Tensión (V)": voltaje,
+
             "Corriente de falla (kA)": corriente,
+
             "Tiempo (s)": tiempo,
+
             "Distancia de trabajo (mm)": distancia,
+
             "Altitud (m)": altitud,
+
             "Parte expuesta": movil,
+
             "Fuente de datos": fuente,
+
             "Responsable": responsable,
-            "Requiere EPP contra arco": requiere_epp,
-            "Clasificación verificada": clasificacion,
-            "Mantenimiento verificado": mantenimiento,
+
+            "Requiere EPP contra arco":
+                requiere_epp,
+
+            "Clasificación verificada":
+                clasificacion,
+
+            "Mantenimiento verificado":
+                mantenimiento,
+
             "Notas verificadas": notas,
-            "Método exclusivo de tablas": solo_tablas,
+
+            "Método exclusivo de tablas":
+                solo_tablas,
+
             "Evidencia normativa": evidencia,
+
             "Método aplicable": (
                 "Sí" if arco["aplicable"]
                 else "No"
             ),
+
             "Categoría": categoria,
+
             "Frontera de arco": arco.get(
                 "frontera"
             ),
+
             "Protección mínima": (
                 PROTECCION_ARCO.get(categoria)
             ),
+
             "Motivo": arco.get("motivo", ""),
+
             "Aproximación limitada": limitada,
+
             "Aproximación restringida": restringida,
+
             "Clase de guante": (
                 guante if guante is not None
                 else "No determinada"
             ),
+
             "Referencia arco": (
                 "130.7(C)(15)(a)"
                 if sistema == "CA"
                 else "130.7(C)(15)(b)"
             ),
+
             "Referencia choque": (
                 "130.4(E)(a)"
                 if sistema == "CA"
                 else "130.4(E)(b)"
             ),
+
             "Estado documental": (
                 "Pendiente de revisión técnica"
             )
@@ -811,10 +912,38 @@ def seleccionar_epp(proyecto):
 
     presentar_resultado(detalle)
 
-    mostrar_guia_epp(
+    seleccion = mostrar_guia_epp(
         categoria=int(detalle["Categoría"]),
-        clave=f"epp_{seleccionado}"
+        clave=(
+            f"epp_{seleccionado}_"
+            f"{detalle.get('Revisión')}"
+        ),
+        anterior=detalle.get(
+            "Selección EPP", {}
+        )
     )
+
+    if st.button(
+        "Guardar selección de EPP",
+        key=f"guardar_epp_{seleccionado}"
+    ):
+
+        actualizado = dict(
+            detalle,
+            **{"Selección EPP": seleccion}
+        )
+
+        actualizar(
+            "arco_electrico",
+            seleccionado,
+            {"detalle": actualizado}
+        )
+
+        st.toast(
+            "Selección de EPP guardada."
+        )
+
+        st.rerun()
 
 
 def mostrar():
@@ -824,6 +953,7 @@ def mostrar():
     )
 
     advertencia_tecnica()
+
     mostrar_aviso("arco")
 
     proyecto = seleccionar_proyecto("arco")
