@@ -31,8 +31,8 @@ PAGINAS = {
     ),
     "05. Etiquetas para equipos": (
         "Desde evaluación recupera puntos vigentes del proyecto. Filtra por equipo, ubicación o categoría y selecciona un punto o un lote para vista previa, guardado e impresión.",
-        "En Datos externos registra una categoría documentada por el método de tablas, la tensión nominal, la frontera de arco, la fuente, la revisión y la persona revisora.",
-        "En Etiquetas guardadas consulta la vista previa. Si se actualiza o elimina el punto de origen, vuelve a generar la etiqueta. Las muestras se identifican como académicas.",
+        "En Datos externos registra una categoría documentada por el método de tablas, la tensión nominal, la frontera, la fila y sus parámetros, la fuente, la revisión y la persona revisora.",
+        "En Etiquetas guardadas consulta la vista previa y el filtro de vigencia. Vuelve a generar la etiqueta si cambia el punto de origen o la revisión cumple más de cinco años. Las muestras se identifican como académicas.",
     ),
     "06. Bloqueo y etiquetado LOTO": (
         "En Catálogo de dispositivos puedes buscar por nombre, elegir dispositivos y descargar su ficha ilustrada. Confirma siempre el modelo y sus instrucciones.",
