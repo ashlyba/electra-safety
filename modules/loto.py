@@ -165,7 +165,7 @@ AYUDAS_POLITICA = {
     "Dispositivos específicos del proyecto y sus referencias": "Registra otros dispositivos, modelo, compatibilidad, colocación, fijación e instrucciones del fabricante.",
     "Control de energía almacenada": "Documenta energía eléctrica y no eléctrica, tratamiento y control de reacumulación según 120.5(B)(2) y 120.6.",
     "Verificación de aislamiento y ausencia de tensión": "Documenta la comprobación de no rearranque y de ausencia de tensión en cada punto de trabajo según 120.5(B)(5)–(6) y 120.6(7).",
-    "Instrumento, EPP y registro de prueba": "Indica clasificación del instrumento, quién verifica, protección y prueba antes y después en fuente conocida, o fundamenta la excepción aplicable.",
+    "Instrumento, EPP y registro de prueba": "Registra instrumento, clasificación y persona calificada. Documenta comprobación en fuente conocida antes y después, los pares de medición fase-fase y fase-tierra cuando procedan, o la excepción aplicable de 120.6(7).",
     "Tensiones inducidas y puesta a tierra temporal": "Indica si corresponde aplicar 120.6(8)–(9), con el criterio documentado.",
     "Capacitación y auditoría": "Registra auditoría del programa cada 3 años como máximo y de los procedimientos cada año como máximo por una persona calificada, según 110.3(L)(3)–(4).",
     "Bloqueo grupal": "Describe el control de llaves, dispositivos individuales y registro de participantes.",
@@ -177,7 +177,6 @@ AYUDAS_POLITICA = {
 
 
 def mostrar_catalogo():
-
     st.subheader("Catálogo de dispositivos LOTO")
 
     st.caption(
@@ -207,26 +206,20 @@ def mostrar_catalogo():
     )
 
     for dispositivo in dispositivos:
-
         with st.container(border=True):
-
             c1, c2 = st.columns([1, 2])
 
             with c1:
-
                 st.image(
                     imagen_svg(dispositivo["ID"]),
                     use_container_width=True
                 )
 
             with c2:
-
                 st.subheader(dispositivo["Nombre"])
 
                 for campo, valor in dispositivo.items():
-
                     if campo not in ["ID", "Nombre"]:
-
                         st.write(
                             f"**{campo}:** {valor}"
                         )
@@ -237,7 +230,6 @@ def mostrar_catalogo():
     ]
 
     if elegidos:
-
         st.download_button(
             "Descargar catálogo ilustrado PDF",
             generar_catalogo_pdf(elegidos, DOCUMENTACION_FABRICANTE),
@@ -250,17 +242,14 @@ def mostrar_catalogo():
 
 
 def mostrar_etiquetas(proyecto):
-
     mostrar_aviso("loto_etiquetas")
 
     st.subheader("Generador de etiquetas LOTO")
 
     with st.form(f"form_etiqueta_loto_{proyecto['id']}"):
-
         c1, c2 = st.columns(2)
 
         with c1:
-
             responsable = st.text_input(
                 "Nombre del responsable"
             )
@@ -274,7 +263,6 @@ def mostrar_etiquetas(proyecto):
             )
 
         with c2:
-
             contacto = st.text_input(
                 "Teléfono o contacto"
             )
@@ -307,14 +295,12 @@ def mostrar_etiquetas(proyecto):
     clave = f"etiqueta_loto_{proyecto['id']}"
 
     if generar:
-
         if not all([
             responsable.strip(),
             equipo.strip(),
             codigo.strip(),
             motivo.strip()
         ]):
-
             st.error(
                 "Completa los campos obligatorios."
             )
@@ -322,7 +308,6 @@ def mostrar_etiquetas(proyecto):
             st.session_state.pop(clave, None)
 
         else:
-
             st.session_state[clave] = {
                 "Responsable": responsable.strip(),
                 "Equipo": equipo.strip(),
@@ -337,15 +322,12 @@ def mostrar_etiquetas(proyecto):
     detalle = st.session_state.get(clave)
 
     if detalle:
-
         st.subheader("Vista previa")
 
         c1, c2 = st.columns([1, 1])
 
         with c1:
-
             with st.container(border=True):
-
                 st.html("""
                 <div style="
                     background:#B91C1C;
@@ -362,9 +344,7 @@ def mostrar_etiquetas(proyecto):
                 st.title("NO OPERAR")
 
                 for campo, valor in detalle.items():
-
                     if campo != "Tipo":
-
                         st.write(
                             f"**{campo}:** {valor}"
                         )
@@ -382,7 +362,6 @@ def mostrar_etiquetas(proyecto):
                 )
 
         with c2:
-
             st.download_button(
                 "Descargar etiqueta PDF",
                 generar_loto_pdf(
@@ -399,9 +378,7 @@ def mostrar_etiquetas(proyecto):
                 type="primary",
                 use_container_width=True
             ):
-
                 try:
-
                     registros = consultar(
                         "loto",
                         {"proyecto_id": proyecto["id"]}
@@ -422,14 +399,12 @@ def mostrar_etiquetas(proyecto):
                     )
 
                     if duplicado:
-
                         st.warning(
                             "Ya existe una etiqueta "
                             "con este código."
                         )
 
                     else:
-
                         respuesta = insertar(
                             "loto",
                             {
@@ -439,20 +414,17 @@ def mostrar_etiquetas(proyecto):
                         )
 
                         if respuesta:
-
                             notificar(
                                 "loto_etiquetas",
                                 "Etiqueta registrada exitosamente."
                             )
 
                         else:
-
                             st.error(
                                 "No se confirmó el guardado."
                             )
 
                 except Exception as error:
-
                     st.error(str(error))
 
     st.divider()
@@ -472,7 +444,6 @@ def mostrar_etiquetas(proyecto):
     ]
 
     if not registros:
-
         st.info(
             "No hay etiquetas registradas."
         )
@@ -502,7 +473,6 @@ def mostrar_etiquetas(proyecto):
     )
 
     if seleccion:
-
         st.download_button(
             "Descargar etiquetas seleccionadas",
             generar_loto_pdf([
@@ -515,7 +485,6 @@ def mostrar_etiquetas(proyecto):
         )
 
     with st.expander("Eliminar etiqueta"):
-
         etiqueta_id = st.selectbox(
             "Seleccionar etiqueta",
             list(opciones),
@@ -532,9 +501,7 @@ def mostrar_etiquetas(proyecto):
             "Eliminar etiqueta",
             disabled=not confirmar
         ):
-
             if eliminar("loto", etiqueta_id):
-
                 notificar(
                     "loto_etiquetas",
                     "Etiqueta eliminada correctamente."
@@ -542,7 +509,6 @@ def mostrar_etiquetas(proyecto):
 
 
 def mostrar():
-
     st.title("06. Bloqueo y etiquetado LOTO")
 
     st.write(
@@ -555,7 +521,6 @@ def mostrar():
     proyecto = seleccionar_proyecto("loto")
 
     if not proyecto:
-
         return
 
     tab1, tab2, tab3 = st.tabs([
@@ -565,7 +530,6 @@ def mostrar():
     ])
 
     with tab1:
-
         mostrar_catalogo()
 
     with tab2:
@@ -583,5 +547,4 @@ def mostrar():
         )
 
     with tab3:
-
         mostrar_etiquetas(proyecto)
