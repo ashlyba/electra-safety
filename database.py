@@ -1,4 +1,3 @@
-
 import streamlit as st
 import logging
 import time
@@ -34,7 +33,6 @@ CACHE_TTL = 60
 
 
 def registrar_conexion(correcta):
-
     st.session_state["conexion_correcta"] = correcta
 
     st.session_state["ultima_conexion"] = (
@@ -43,7 +41,6 @@ def registrar_conexion(correcta):
 
 
 def estado_conexion():
-
     return st.session_state.get(
         "conexion_correcta",
         None
@@ -51,11 +48,8 @@ def estado_conexion():
 
 
 def conectar():
-
     if "supabase_cliente" not in st.session_state:
-
         try:
-
             st.session_state.supabase_cliente = (
                 create_client(
                     st.secrets["supabase"]["url"],
@@ -64,7 +58,6 @@ def conectar():
             )
 
         except Exception:
-
             registrar_conexion(False)
 
             logging.exception(
@@ -77,18 +70,14 @@ def conectar():
 
 
 def iniciar_sesion(correo, password):
-
     with st.spinner("Verificando credenciales..."):
-
         try:
-
             respuesta = conectar().auth.sign_in_with_password({
                 "email": correo,
                 "password": password
             })
 
             if respuesta.user:
-
                 st.session_state.usuario = (
                     respuesta.user.email
                 )
@@ -102,7 +91,6 @@ def iniciar_sesion(correo, password):
             return False
 
         except Exception:
-
             logging.exception(
                 "Error de autenticación"
             )
@@ -111,25 +99,20 @@ def iniciar_sesion(correo, password):
 
 
 def cerrar_sesion():
-
     with st.spinner("Cerrando sesión..."):
-
-        conectar().auth.sign_out()
+        conectar().auth.sign_out({"scope": "local"})
 
         st.session_state.clear()
 
 
 def validar_tabla(tabla):
-
     if tabla not in TABLAS:
-
         raise ValueError(
             "Tabla no permitida."
         )
 
 
 def _cache():
-
     return st.session_state.setdefault(
         "_consulta_cache",
         {}
@@ -137,7 +120,6 @@ def _cache():
 
 
 def _clave(tipo, tabla, filtros):
-
     return (
         tipo,
         tabla,
@@ -151,13 +133,10 @@ def _clave(tipo, tabla, filtros):
 
 
 def _leer(clave):
-
     entrada = _cache().get(clave)
 
     if entrada:
-
         if time.monotonic() - entrada[0] < CACHE_TTL:
-
             return deepcopy(entrada[1])
 
         _cache().pop(clave, None)
@@ -166,7 +145,6 @@ def _leer(clave):
 
 
 def _guardar(clave, valor):
-
     _cache()[clave] = (
         time.monotonic(),
         deepcopy(valor)
@@ -175,13 +153,17 @@ def _guardar(clave, valor):
     return valor
 
 
-def invalidar_cache():
-
-    _cache().clear()
+def invalidar_cache(tabla=None):
+    cache = _cache()
+    if tabla is None:
+        cache.clear()
+        return
+    for clave in list(cache):
+        if clave[1] == tabla:
+            cache.pop(clave, None)
 
 
 def consultar(tabla, filtros=None):
-
     validar_tabla(tabla)
 
     clave = _clave(
@@ -193,7 +175,6 @@ def consultar(tabla, filtros=None):
     previo = _leer(clave)
 
     if previo is not None:
-
         return previo
 
     nombre = NOMBRES_TABLAS[tabla]
@@ -205,19 +186,14 @@ def consultar(tabla, filtros=None):
     limite = 500
 
     with st.spinner(f"Consultando {nombre}..."):
-
         try:
-
             while True:
-
                 consulta = conectar().table(
                     tabla
                 ).select("*")
 
                 if filtros:
-
                     for campo, valor in filtros.items():
-
                         consulta = consulta.eq(
                             campo,
                             valor
@@ -238,7 +214,6 @@ def consultar(tabla, filtros=None):
                 registros.extend(datos)
 
                 if len(datos) < limite:
-
                     break
 
                 inicio += limite
@@ -251,7 +226,6 @@ def consultar(tabla, filtros=None):
             )
 
         except Exception:
-
             registrar_conexion(False)
 
             logging.exception(
@@ -263,15 +237,12 @@ def consultar(tabla, filtros=None):
 
 
 def insertar(tabla, datos):
-
     validar_tabla(tabla)
 
     with st.spinner(
         "Guardando información. Espere un momento..."
     ):
-
         try:
-
             respuesta = conectar().table(
                 tabla
             ).insert(
@@ -280,12 +251,11 @@ def insertar(tabla, datos):
 
             registrar_conexion(True)
 
-            invalidar_cache()
+            invalidar_cache(tabla)
 
             return respuesta.data
 
         except Exception:
-
             logging.exception(
                 "Error al insertar en %s",
                 tabla
@@ -300,15 +270,12 @@ def insertar(tabla, datos):
 
 
 def actualizar(tabla, registro_id, datos):
-
     validar_tabla(tabla)
 
     with st.spinner(
         "Actualizando información..."
     ):
-
         try:
-
             respuesta = conectar().table(
                 tabla
             ).update(
@@ -320,12 +287,11 @@ def actualizar(tabla, registro_id, datos):
 
             registrar_conexion(True)
 
-            invalidar_cache()
+            invalidar_cache(tabla)
 
             return respuesta.data
 
         except Exception:
-
             logging.exception(
                 "Error al actualizar %s",
                 tabla
@@ -339,15 +305,12 @@ def actualizar(tabla, registro_id, datos):
 
 
 def eliminar(tabla, registro_id):
-
     validar_tabla(tabla)
 
     with st.spinner(
         "Eliminando registro..."
     ):
-
         try:
-
             respuesta = conectar().table(
                 tabla
             ).delete().eq(
@@ -362,14 +325,13 @@ def eliminar(tabla, registro_id):
             return respuesta.data
 
         except Exception:
-
             logging.exception(
                 "Error al eliminar de %s",
                 tabla
             )
 
             st.toast(
-                "No fue posible eliminar el registro. "
+                "No se pudo eliminar el registro. "
                 "Revise si tiene información asociada."
             )
 
@@ -377,7 +339,6 @@ def eliminar(tabla, registro_id):
 
 
 def contar(tabla, filtros=None):
-
     validar_tabla(tabla)
 
     clave = _clave(
@@ -389,7 +350,6 @@ def contar(tabla, filtros=None):
     previo = _leer(clave)
 
     if previo is not None:
-
         return previo
 
     datos = _leer(
@@ -401,11 +361,9 @@ def contar(tabla, filtros=None):
     )
 
     if datos is not None:
-
         return len(datos)
 
     try:
-
         consulta = conectar().table(
             tabla
         ).select(
@@ -415,7 +373,6 @@ def contar(tabla, filtros=None):
         )
 
         for campo, valor in (filtros or {}).items():
-
             consulta = consulta.eq(
                 campo,
                 valor
@@ -431,7 +388,6 @@ def contar(tabla, filtros=None):
         )
 
     except Exception:
-
         registrar_conexion(False)
 
         logging.exception(
